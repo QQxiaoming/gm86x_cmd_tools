@@ -15,7 +15,9 @@ add_library(gm86x_core
     core/src/protocol.cpp
 )
 target_include_directories(gm86x_core PUBLIC core/include)
-target_compile_options(gm86x_core PRIVATE -Wall -Wextra -Wpedantic)
+if(NOT MSVC)
+    target_compile_options(gm86x_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 if(WIN32)
     add_subdirectory(windows_uvc/libusb_win)
@@ -27,14 +29,18 @@ if(WIN32)
     ${CMAKE_CURRENT_SOURCE_DIR}/windows_uvc/libusb_win)
 	target_link_libraries(gm86x_cmd_uvc_tools PRIVATE
     libusb gm86x_core setupapi advapi32)
-	target_compile_options(gm86x_cmd_uvc_tools PRIVATE -Wall -Wextra -Wpedantic)
+	if(NOT MSVC)
+	    target_compile_options(gm86x_cmd_uvc_tools PRIVATE -Wall -Wextra -Wpedantic)
+	endif()
 else()
     add_executable(gm86x_cmd_i2c_tools 
         linux_i2c/linux_i2c.cpp
         linux_i2c/media_discovery.cpp
         linux_i2c/main.cpp)
     target_link_libraries(gm86x_cmd_i2c_tools PRIVATE gm86x_core)
-    target_compile_options(gm86x_cmd_i2c_tools PRIVATE -Wall -Wextra -Wpedantic)
+    if(NOT MSVC)
+        target_compile_options(gm86x_cmd_i2c_tools PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 
     find_package(PkgConfig)
     if(PkgConfig_FOUND)
@@ -65,7 +71,9 @@ else()
                 linux_uvc/usb_discovery.cpp
                 linux_uvc/main.cpp)
             target_link_libraries(gm86x_cmd_uvc_tools PRIVATE gm86x_core PkgConfig::LIBUSB)
-            target_compile_options(gm86x_cmd_uvc_tools PRIVATE -Wall -Wextra -Wpedantic)
+            if(NOT MSVC)
+                target_compile_options(gm86x_cmd_uvc_tools PRIVATE -Wall -Wextra -Wpedantic)
+            endif()
         else()
             message(STATUS "libusb-1.0 not available for '${GM86X_CXX_TARGET_TRIPLE}', skipping gm86x_cmd_uvc_tools (host-only tool)")
         endif()
