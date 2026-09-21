@@ -29,6 +29,7 @@ if(WIN32)
     ${CMAKE_CURRENT_SOURCE_DIR}/windows_uvc/libusb_win)
 	target_link_libraries(gm86x_cmd_uvc_tools PRIVATE
     libusb gm86x_core setupapi advapi32)
+	target_compile_definitions(gm86x_cmd_uvc_tools PRIVATE NOMINMAX)
 	if(NOT MSVC)
 	    target_compile_options(gm86x_cmd_uvc_tools PRIVATE -Wall -Wextra -Wpedantic)
 	endif()

@@ -47,7 +47,8 @@ libusb_device_handle *open_device(libusb_context *context, std::uint16_t vendor_
 }
 
 void validate_transfer_size(const std::vector<std::uint8_t> &data) {
-    if (data.empty() || data.size() > std::numeric_limits<std::uint16_t>::max())
+    // Parenthesize to avoid clashing with windows.h's max() macro.
+    if (data.empty() || data.size() > (std::numeric_limits<std::uint16_t>::max)())
         throw std::invalid_argument("USB XU transfer length must be 1..65535 bytes");
 }
 
