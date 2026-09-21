@@ -15,7 +15,7 @@ public:
     WindowsUsbXuTransport(std::uint16_t vendor_id, std::uint16_t product_id,
                           std::size_t device_index, std::uint8_t control_interface,
                           std::uint8_t unit, std::uint8_t selector,
-                          unsigned timeout_ms = 2000);
+                          unsigned timeout_ms = 2000, bool debug = false);
     ~WindowsUsbXuTransport() override;
 
     WindowsUsbXuTransport(const WindowsUsbXuTransport &) = delete;
@@ -34,6 +34,7 @@ private:
     std::uint8_t unit_;
     std::uint8_t selector_;
     unsigned timeout_ms_;
+    bool debug_;
 };
 
 } // namespace gm86x
