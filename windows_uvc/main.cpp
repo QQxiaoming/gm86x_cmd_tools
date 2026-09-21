@@ -22,7 +22,7 @@ Global options:
     -v, --vid <hex>         USB vendor id, default 0x2ac1
     -p, --pid <hex>         USB product id, default 0xfd00
     -n, --index <decimal>   matching device index, default 0
-    -i, --interface <hex>   UVC VideoControl interface, default 0
+    -i, --interface <hex>   UVC VideoControl interface, default 4
     -u, --unit <hex>        UVC extension unit id, default 04
 
 UVC I2C_FORWARD uses fixed XU Control Selector 0x05.
@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
         std::uint16_t vendor_id = 0x2ac1;
         std::uint16_t product_id = 0xfd00;
         std::size_t device_index = 0;
-        std::uint8_t control_interface = 0;
+        std::uint8_t control_interface = 4;
         std::uint8_t unit = 4;
         std::uint8_t sequence = 1;
         std::optional<bool> buffer_updates;
