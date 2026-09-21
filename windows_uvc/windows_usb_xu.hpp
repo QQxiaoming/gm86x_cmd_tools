@@ -14,7 +14,7 @@ class WindowsUsbXuTransport final : public I2cTransport {
 public:
     WindowsUsbXuTransport(std::uint16_t vendor_id, std::uint16_t product_id,
                           std::size_t device_index, std::uint8_t control_interface,
-                          std::uint8_t unit, std::uint8_t selector,
+                          std::uint8_t selector,
                           unsigned timeout_ms = 2000, bool debug = false);
     ~WindowsUsbXuTransport() override;
 

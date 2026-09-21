@@ -71,9 +71,9 @@ void validate_transfer_size(const std::vector<std::uint8_t> &data) {
 
 WindowsUsbXuTransport::WindowsUsbXuTransport(std::uint16_t vendor_id, std::uint16_t product_id,
                                              std::size_t device_index, std::uint8_t control_interface,
-                                             std::uint8_t unit, std::uint8_t selector, unsigned timeout_ms,
+                                             std::uint8_t selector, unsigned timeout_ms,
                                              bool debug)
-    : context_(nullptr), handle_(nullptr), interface_(control_interface), unit_(unit), selector_(selector),
+    : context_(nullptr), handle_(nullptr), interface_(control_interface), selector_(selector),
       timeout_ms_(timeout_ms), debug_(debug) {
     if (libusb_init(&context_) != LIBUSB_SUCCESS)
         throw std::runtime_error("libusb_init failed");
@@ -107,9 +107,8 @@ void WindowsUsbXuTransport::set_cur(const std::vector<std::uint8_t> &data) {
     validate_transfer_size(data);
     std::vector<std::uint8_t> buffer = data;
     const auto value = static_cast<std::uint16_t>(selector_) << 8;
-    const auto index = static_cast<std::uint16_t>((static_cast<std::uint16_t>(unit_) << 8) | interface_);
-    const std::uint8_t request_type = LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE;
-    // RECIPIENT_DEVICE avoids WinUSB forcing wIndex's low byte to the claimed interface number.
+    const auto index = static_cast<std::uint16_t>(interface_);
+    const std::uint8_t request_type = LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_INTERFACE;
     const auto result = libusb_control_transfer(handle_, request_type,
                                                 0x01, value, index, buffer.data(),
                                                 static_cast<std::uint16_t>(buffer.size()), timeout_ms_);
@@ -125,9 +124,8 @@ void WindowsUsbXuTransport::set_cur(const std::vector<std::uint8_t> &data) {
 void WindowsUsbXuTransport::get_cur(std::vector<std::uint8_t> &data) {
     validate_transfer_size(data);
     const auto value = static_cast<std::uint16_t>(selector_) << 8;
-    const auto index = static_cast<std::uint16_t>((static_cast<std::uint16_t>(unit_) << 8) | interface_);
-    const std::uint8_t request_type = LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE;
-    // RECIPIENT_DEVICE avoids WinUSB forcing wIndex's low byte to the claimed interface number.
+    const auto index = static_cast<std::uint16_t>(interface_);
+    const std::uint8_t request_type = LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_INTERFACE;
     const auto result = libusb_control_transfer(handle_, request_type,
                                                 0x81, value, index, data.data(),
                                                 static_cast<std::uint16_t>(data.size()), timeout_ms_);

@@ -23,7 +23,6 @@ Global options:
     -p, --pid <hex>         USB product id, default 0xfd00
     -n, --index <decimal>   matching device index, default 0
     -i, --interface <hex>   UVC VideoControl interface, default 4
-    -u, --unit <hex>        UVC extension unit id, default 04
     -x, --debug             enable verbose libusb/control-transfer logging
 
 UVC I2C_FORWARD uses fixed XU Control Selector 0x05.
@@ -37,7 +36,6 @@ int main(int argc, char **argv) {
         std::uint16_t product_id = 0xfd00;
         std::size_t device_index = 0;
         std::uint8_t control_interface = 4;
-        std::uint8_t unit = 4;
         std::uint8_t sequence = 1;
         bool debug = false;
         std::optional<bool> buffer_updates;
@@ -66,8 +64,6 @@ int main(int argc, char **argv) {
                 device_index = gm86x::parse_decimal_or_hex_u32(argv[index++]);
             else if ((option == "-i" || option == "--interface") && index < argc)
                 control_interface = gm86x::parse_byte(argv[index++]);
-            else if ((option == "-u" || option == "--unit") && index < argc)
-                unit = gm86x::parse_byte(argv[index++]);
             else if (option == "-x" || option == "--debug")
                 debug = true;
             else if (option == "--buffer-updates") {
@@ -93,7 +89,7 @@ int main(int argc, char **argv) {
             throw std::invalid_argument("missing command");
 
         gm86x::WindowsUsbXuTransport transport(vendor_id, product_id, device_index,
-                                               control_interface, unit, i2c_forward_selector,
+                                               control_interface, i2c_forward_selector,
                                                2000, debug);
         gm86x::ProtocolClient client(transport);
         client.set_polling(retries, interval);
