@@ -89,7 +89,8 @@ void WindowsUsbXuTransport::set_cur(const std::vector<std::uint8_t> &data) {
     std::vector<std::uint8_t> buffer = data;
     const auto value = static_cast<std::uint16_t>(selector_) << 8;
     const auto index = static_cast<std::uint16_t>((static_cast<std::uint16_t>(unit_) << 8) | interface_);
-    const auto result = libusb_control_transfer(handle_, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_CLASS |
+    // interface_ is a Vendor Specific interface (not UVC Video Control), so the request type is VENDOR.
+    const auto result = libusb_control_transfer(handle_, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR |
                                                         LIBUSB_RECIPIENT_INTERFACE,
                                                 0x01, value, index, buffer.data(),
                                                 static_cast<std::uint16_t>(buffer.size()), timeout_ms_);
@@ -103,7 +104,8 @@ void WindowsUsbXuTransport::get_cur(std::vector<std::uint8_t> &data) {
     validate_transfer_size(data);
     const auto value = static_cast<std::uint16_t>(selector_) << 8;
     const auto index = static_cast<std::uint16_t>((static_cast<std::uint16_t>(unit_) << 8) | interface_);
-    const auto result = libusb_control_transfer(handle_, LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_CLASS |
+    // interface_ is a Vendor Specific interface (not UVC Video Control), so the request type is VENDOR.
+    const auto result = libusb_control_transfer(handle_, LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR |
                                                         LIBUSB_RECIPIENT_INTERFACE,
                                                 0x81, value, index, data.data(),
                                                 static_cast<std::uint16_t>(data.size()), timeout_ms_);
