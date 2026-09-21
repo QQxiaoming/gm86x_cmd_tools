@@ -121,6 +121,10 @@ const char *CommandGroup::opcode_name(std::uint8_t opcode) {
         return "ISP_READ_SUBSENSOR_REGISTER";
     case GMSL_COMMAND_ISP_WRITE_SUBSENSOR_REGISTER:
         return "ISP_WRITE_SUBSENSOR_REGISTER";
+    case GMSL_COMMAND_POST_PROCESSOR_RAW_WRITE:
+        return "POST_PROCESSOR_RAW_WRITE";
+    case GMSL_COMMAND_POST_PROCESSOR_RAW_READ:
+        return "POST_PROCESSOR_RAW_READ";
     case GMSL_COMMAND_PERCIPIO_DEBUG:
         return "PERCIPIO_DEBUG";
     default:
