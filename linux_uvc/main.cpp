@@ -20,8 +20,7 @@ static void print_help(const std::string &exe_name) {
     )" << exe_name << R"( [global options] <command> [args...]
 
 Global options:
-    -d, --device <path>      UVC video node, default /dev/video0
-	-u, --unit <hex>         UVC extension unit id, default 03
+    -d, --device <path>      UVC video node, default /dev/video6
 
 Talks to the UVC extension unit directly via libusb control transfers
 (bypassing the uvcvideo driver's XU control size limit). UVC I2C_FORWARD
@@ -33,7 +32,6 @@ uses fixed XU Control Selector 0x05.
 int main(int argc, char **argv) {
 	try {
 		std::string device = "/dev/video6";
-		std::uint8_t unit = 4;
 		std::uint8_t sequence = 1;
 		std::optional<bool> buffer_updates;
 		bool end_update = false;
@@ -54,8 +52,6 @@ int main(int argc, char **argv) {
 			}
 			if ((option == "-d" || option == "--device") && index < argc)
 				device = argv[index++];
-			else if ((option == "-u" || option == "--unit") && index < argc)
-				unit = gm86x::parse_byte(argv[index++]);
 			else if (option == "--buffer-updates") {
 				if (index >= argc || (std::string(argv[index]) != "0" && std::string(argv[index]) != "1"))
 					throw std::invalid_argument("--buffer-updates requires <0|1>");
@@ -79,6 +75,9 @@ int main(int argc, char **argv) {
 		if (index >= argc)
 			throw std::invalid_argument("missing command");
 		const auto target = gm86x::discover_usb_xu_target(device);
+		const std::uint8_t unit = target.extension_unit_id;
+		printf("Discovered USB XU target: vendor_id=0x%04x, product_id=0x%04x, bus_number=%u, device_address=%u, control_interface=%u, extension_unit_id=%u\n",
+			target.vendor_id, target.product_id, target.bus_number, target.device_address, target.control_interface, target.extension_unit_id);
 		gm86x::LinuxUsbXuTransport transport(target, unit, i2c_forward_selector);
 		gm86x::ProtocolClient client(transport);
 		client.set_polling(retries, interval);

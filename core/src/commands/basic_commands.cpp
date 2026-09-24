@@ -3,9 +3,11 @@
 #include "bytes.hpp"
 
 #include <cstring>
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <thread>
 
 namespace gm86x::detail {
 
@@ -400,23 +402,6 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
             value = binary_value(args[0], name);
         }
         execute(GMSL_COMMAND_LOW_POWER_MODE, {value});
-        return true;
-    }
-    if (name == "post-processor-raw-write") {
-        if (args.empty())
-            throw std::invalid_argument("post-processor-raw-write requires <data>");
-        execute(GMSL_COMMAND_POST_PROCESSOR_RAW_WRITE, parse_byte_list(args));
-        return true;
-    }
-    if (name == "post-processor-raw-read") {
-        require_args(args, 1, name + " requires <size>");
-        const auto response = execute(GMSL_COMMAND_POST_PROCESSOR_RAW_READ, le16(parse_u16(args[0])));
-        if (response.status != 0)
-            return true;
-        if (!response.payload.empty()) {
-            print_section("post-processor-raw-read");
-            print_field("data") << ascii_field(response.payload, 0, response.payload.size()) << '\n';
-        }
         return true;
     }
     if (name == "isp-get-version") {

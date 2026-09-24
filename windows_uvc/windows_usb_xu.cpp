@@ -70,10 +70,10 @@ void validate_transfer_size(const std::vector<std::uint8_t> &data) {
 } // namespace
 
 WindowsUsbXuTransport::WindowsUsbXuTransport(std::uint16_t vendor_id, std::uint16_t product_id,
-                                             std::size_t device_index, std::uint8_t control_interface,
+                                             std::size_t device_index,
                                              std::uint8_t selector, unsigned timeout_ms,
                                              bool debug)
-    : context_(nullptr), handle_(nullptr), interface_(control_interface), selector_(selector),
+    : context_(nullptr), handle_(nullptr), interface_(4), selector_(selector),
       timeout_ms_(timeout_ms), debug_(debug) {
     if (libusb_init(&context_) != LIBUSB_SUCCESS)
         throw std::runtime_error("libusb_init failed");

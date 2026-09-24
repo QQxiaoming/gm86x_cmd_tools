@@ -4,6 +4,7 @@
 #include "commands/basic_commands.hpp"
 #include "commands/gige_commands.hpp"
 #include "commands/partition_commands.hpp"
+#include "commands/post_processor_commands.hpp"
 #include "commands/register_commands.hpp"
 
 #include <iostream>
@@ -269,6 +270,7 @@ void CommandGroup::print_transfer_progress(std::size_t completed, std::size_t to
 
 CommandDispatcher::CommandDispatcher(CommandContext &context) : context_(context) {
     register_group(std::make_unique<detail::BasicCommandGroup>(context));
+    register_group(std::make_unique<detail::PostProcessorCommandGroup>(context));
     register_group(std::make_unique<detail::GigeCommandGroup>(context));
     register_group(std::make_unique<detail::RegisterCommandGroup>(context));
     register_group(std::make_unique<detail::PartitionCommandGroup>(context));
@@ -327,6 +329,19 @@ Commands:
     isp-subsnr-write <reg16> <value16>
     post-processor-raw-write <byte...>
     post-processor-raw-read <size>
+    post-processor-cmd ping [payload_byte...]
+    post-processor-cmd get-status
+    post-processor-cmd get-caps
+    post-processor-cmd set-pipeline-config <control_gen> <pipeline_mask> <config_id> <config_flags>
+    post-processor-cmd stream-control <control_gen> <stream_id> <enable>
+    post-processor-cmd get-stream-state <stream_id>
+    post-processor-cmd reset-pipeline <control_gen> <pipeline_mask>
+    post-processor-cmd get-action-status <action_id>
+    post-processor-cmd set-test-pattern <control_gen> <stream_id> <enable> <pattern_id>
+    post-processor-cmd get-statistics <source_mask>
+    post-processor-cmd clear-statistics <source_mask>
+    post-processor-cmd reset-usb <control_gen> <confirm>
+    post-processor-cmd debug-reg-access <operation> <address> <value>
     imu-read <count>
     temp-read <0|1|2|3|left|right|laser|laser2>
     set-auto-userset-slot <slot>

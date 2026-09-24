@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(gm86x_core
     core/src/commands/basic_commands.cpp
+    core/src/commands/post_processor_commands.cpp
     core/src/commands/gige_commands.cpp
     core/src/commands/register_commands.cpp
     core/src/commands/partition_commands.cpp
