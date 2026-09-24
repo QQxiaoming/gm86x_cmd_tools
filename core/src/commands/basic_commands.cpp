@@ -3,9 +3,11 @@
 #include "bytes.hpp"
 
 #include <cstring>
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <thread>
 
 namespace gm86x::detail {
 
@@ -489,7 +491,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
             write_post_processor_cmd(cmd, seq, data);
             int timeout = 1000; // 1000ms timeout for the command
             do{
-                usleep(1000); // sleep for 1ms to avoid busy waiting
+                std::this_thread::sleep_for(std::chrono::milliseconds(1)); // sleep for 1ms to avoid busy waiting
                 timeout--;
                 if (timeout <= 0) {
                     throw std::runtime_error("post-processor-cmd ping timed out");
