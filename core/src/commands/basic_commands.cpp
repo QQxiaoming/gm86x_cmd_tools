@@ -226,6 +226,63 @@ std::uint8_t BasicCommandGroup::pps_period(const std::string &value) const {
     throw std::invalid_argument("invalid PPS period: " + value);
 }
 
+void BasicCommandGroup::write_post_processor_register(uint8_t addr, std::vector<std::uint8_t> data)
+{
+    std::vector<std::uint8_t> payload;
+    //addr
+    payload.push_back(addr); //RX_SEQUENCE
+    payload.insert(payload.end(), data.begin(), data.end());
+    execute(GMSL_COMMAND_POST_PROCESSOR_RAW_WRITE, payload, false, false);
+}
+
+std::vector<std::uint8_t> BasicCommandGroup::read_post_processor_register(uint8_t addr, uint8_t size)
+{
+    std::vector<std::uint8_t> payload;
+    payload.push_back(addr);
+    execute(GMSL_COMMAND_POST_PROCESSOR_RAW_WRITE, payload, false, false);
+
+    payload.clear();
+    payload.push_back(size); 
+    payload.push_back(0x0); 
+    auto response = execute(GMSL_COMMAND_POST_PROCESSOR_RAW_READ, payload, false, false);
+    return response.payload;
+}
+
+void BasicCommandGroup::write_post_processor_cmd(uint8_t cmd, uint8_t sequence, std::vector<std::uint8_t> data)
+{
+    std::vector<std::uint8_t> payload;
+    //sequence
+    payload.push_back(sequence);
+    //command
+    payload.push_back(cmd);
+    payload.push_back(static_cast<std::uint8_t>(data.size()));
+    payload.insert(payload.end(), data.begin(), data.end());
+    write_post_processor_register(0x10, payload);
+}
+
+bool BasicCommandGroup::is_post_processor_cmd_ready() {
+    return read_post_processor_register(0x19, 1)[0] == 0x5a; 
+}
+
+void BasicCommandGroup::clear_post_processor_cmd_is_ready()
+{
+    write_post_processor_register(0x19, {0x00});
+}
+
+std::vector<std::uint8_t> BasicCommandGroup::read_post_processor_response(uint8_t cmd, uint8_t sequence, uint8_t &size, uint8_t &status)
+{
+    std::vector<std::uint8_t> response = read_post_processor_register(0x14,4);
+    if (sequence != response[0])
+        throw std::runtime_error("sequence mismatch");
+    if (cmd != response[1])
+        throw std::runtime_error("command mismatch");
+    status = response[2];
+    size = response[3];
+
+    response = read_post_processor_register(0x18,size);
+    return response;
+}
+
 bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<std::string> &args) {
     const std::string name(name_view);
     if (name == "probe") {
@@ -418,6 +475,33 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
             print_field("data") << ascii_field(response.payload, 0, response.payload.size()) << '\n';
         }
         return true;
+    }
+    if (name == "post-processor-cmd") {
+        if (args.empty())
+            throw std::invalid_argument("post-processor-cmd requires cmd <arg>");
+        const std::string cmd = args[0];
+        auto subargs = args;
+        subargs.erase(subargs.begin());
+        if (cmd == "ping") {
+            std::vector<std::uint8_t> payload;
+            std::vector<std::uint8_t> data = parse_byte_list(std::span<const std::string>(subargs).subspan(0));
+            uint8_t cmd = 0x01, seq = 0x1;
+            write_post_processor_cmd(cmd, seq, data);
+            int timeout = 1000; // 1000ms timeout for the command
+            do{
+                usleep(1000); // sleep for 1ms to avoid busy waiting
+                timeout--;
+                if (timeout <= 0) {
+                    throw std::runtime_error("post-processor-cmd ping timed out");
+                }
+            }while(!is_post_processor_cmd_ready());
+
+            uint8_t size = 0, status = 0;
+            const auto response = read_post_processor_response(cmd, seq, size, status);
+            print_section("post-processor-cmd ping");
+            print_field("status") << static_cast<unsigned>(status) << '\n';
+            return true;
+        }
     }
     if (name == "isp-get-version") {
         require_args(args, 0, name + " takes no arguments");

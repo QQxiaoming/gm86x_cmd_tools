@@ -28,6 +28,13 @@ private:
 	std::uint8_t binary_value(const std::string &value, const std::string &command) const;
 	std::uint8_t pps_mode(const std::string &value) const;
 	std::uint8_t pps_period(const std::string &value) const;
+
+	void write_post_processor_register(uint8_t addr, std::vector<std::uint8_t> data);
+	std::vector<std::uint8_t> read_post_processor_register(uint8_t addr, uint8_t size);
+	void write_post_processor_cmd(uint8_t cmd, uint8_t sequence, std::vector<std::uint8_t> data);
+	bool is_post_processor_cmd_ready();
+	void clear_post_processor_cmd_is_ready();
+	std::vector<std::uint8_t> read_post_processor_response(uint8_t cmd, uint8_t sequence, uint8_t &size, uint8_t &status);
 };
 
 }

@@ -11,8 +11,50 @@ namespace gm86x {
 
 namespace {
 
+constexpr std::uint8_t usb_class_video = 0x0e;
+constexpr std::uint8_t uvc_subclass_control = 0x01;
+constexpr std::uint8_t uvc_cs_interface = 0x24;
+constexpr std::uint8_t uvc_vc_extension_unit = 0x06;
+
 std::string usb_error(int code) {
     return libusb_error_name(code) ? libusb_error_name(code) : "unknown libusb error";
+}
+
+// Locates the UVC VideoControl interface by parsing the class-specific
+// descriptors in the active USB configuration descriptor, the same way the
+// Linux tool and the reference host implementation discover it, instead of
+// requiring the caller to know/guess the interface number.
+bool find_control_interface(libusb_device *device, std::uint8_t &control_interface) {
+    libusb_config_descriptor *config = nullptr;
+    if (libusb_get_active_config_descriptor(device, &config) != LIBUSB_SUCCESS || !config)
+        return false;
+
+    bool found = false;
+    for (int i = 0; i < config->bNumInterfaces && !found; ++i) {
+        const libusb_interface &iface = config->interface[i];
+        for (int alt = 0; alt < iface.num_altsetting && !found; ++alt) {
+            const libusb_interface_descriptor &desc = iface.altsetting[alt];
+            if (desc.bInterfaceClass != usb_class_video || desc.bInterfaceSubClass != uvc_subclass_control)
+                continue;
+
+            const std::uint8_t *data = desc.extra;
+            int remaining = desc.extra_length;
+            while (data && remaining >= 3) {
+                const std::uint8_t length = data[0];
+                if (length < 3 || length > remaining)
+                    break;
+                if (data[1] == uvc_cs_interface && data[2] == uvc_vc_extension_unit) {
+                    control_interface = desc.bInterfaceNumber;
+                    found = true;
+                    break;
+                }
+                data += length;
+                remaining -= length;
+            }
+        }
+    }
+    libusb_free_config_descriptor(config);
+    return found;
 }
 
 void log_control_transfer(const char *label, std::uint8_t request_type, std::uint8_t request,
@@ -30,7 +72,8 @@ void log_control_transfer(const char *label, std::uint8_t request_type, std::uin
 }
 
 libusb_device_handle *open_device(libusb_context *context, std::uint16_t vendor_id,
-                                  std::uint16_t product_id, std::size_t device_index) {
+                                  std::uint16_t product_id, std::size_t device_index,
+                                  std::uint8_t &control_interface) {
     libusb_device **devices = nullptr;
     const auto count = libusb_get_device_list(context, &devices);
     if (count < 0)
@@ -38,6 +81,7 @@ libusb_device_handle *open_device(libusb_context *context, std::uint16_t vendor_
 
     std::size_t match_index = 0;
     libusb_device_handle *handle = nullptr;
+    bool found_control_interface = false;
     for (ssize_t i = 0; i < count; ++i) {
         libusb_device_descriptor descriptor{};
         if (libusb_get_device_descriptor(devices[i], &descriptor) != LIBUSB_SUCCESS)
@@ -46,6 +90,8 @@ libusb_device_handle *open_device(libusb_context *context, std::uint16_t vendor_
             continue;
         if (match_index++ != device_index)
             continue;
+
+        found_control_interface = find_control_interface(devices[i], control_interface);
 
         const auto result = libusb_open(devices[i], &handle);
         if (result != LIBUSB_SUCCESS) {
@@ -58,6 +104,8 @@ libusb_device_handle *open_device(libusb_context *context, std::uint16_t vendor_
 
     if (!handle)
         throw std::runtime_error("USB device not found for VID/PID/index");
+    if (!found_control_interface)
+        throw std::runtime_error("no UVC VideoControl interface found for device");
     return handle;
 }
 
@@ -70,10 +118,10 @@ void validate_transfer_size(const std::vector<std::uint8_t> &data) {
 } // namespace
 
 WindowsUsbXuTransport::WindowsUsbXuTransport(std::uint16_t vendor_id, std::uint16_t product_id,
-                                             std::size_t device_index, std::uint8_t control_interface,
+                                             std::size_t device_index,
                                              std::uint8_t selector, unsigned timeout_ms,
                                              bool debug)
-    : context_(nullptr), handle_(nullptr), interface_(control_interface), selector_(selector),
+    : context_(nullptr), handle_(nullptr), interface_(0), selector_(selector),
       timeout_ms_(timeout_ms), debug_(debug) {
     if (libusb_init(&context_) != LIBUSB_SUCCESS)
         throw std::runtime_error("libusb_init failed");
@@ -82,7 +130,9 @@ WindowsUsbXuTransport::WindowsUsbXuTransport(std::uint16_t vendor_id, std::uint1
         libusb_set_option(context_, LIBUSB_OPTION_LOG_LEVEL, LIBUSB_LOG_LEVEL_DEBUG);
 
     try {
-        handle_ = open_device(context_, vendor_id, product_id, device_index);
+        std::uint8_t discovered_interface = 0;
+        handle_ = open_device(context_, vendor_id, product_id, device_index, discovered_interface);
+        interface_ = control_interface_override.value_or(discovered_interface);
         const auto result = libusb_claim_interface(handle_, interface_);
         if (result != LIBUSB_SUCCESS)
             throw std::runtime_error("libusb_claim_interface failed: " + usb_error(result));
