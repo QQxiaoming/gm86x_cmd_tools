@@ -329,8 +329,8 @@ Commands:
     isp-subsnr-write <reg16> <value16>
     post-processor-raw-write <byte...>
     post-processor-raw-read <size>
-    post-processor-raw-write <reg> <byte...>
-    post-processor-raw-read <reg> <size>
+    post-processor-reg-write <reg> <byte...>
+    post-processor-reg-read <reg> <size>
     post-processor-cmd ping [payload_byte...]
     post-processor-cmd get-status
     post-processor-cmd get-caps
