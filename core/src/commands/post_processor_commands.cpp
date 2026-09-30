@@ -59,11 +59,10 @@ PostProcessorCommandGroup::CommandResponse PostProcessorCommandGroup::execute_co
         throw std::invalid_argument("post-processor payload exceeds 251 bytes");
 
     const auto sequence = next_sequence_++;
-    if (next_sequence_ == 0)
-        next_sequence_ = 1;
     write_command(command, sequence, std::move(payload));
 
-    for (int timeout = 1000; timeout > 0; --timeout) {
+    const int timeout_ms = command == 0x1a ? 30000 : command == 0x19 ? 10000 : 1000;
+    for (int timeout = timeout_ms; timeout > 0; --timeout) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         if (!command_is_ready())
             continue;
@@ -85,7 +84,8 @@ void PostProcessorCommandGroup::require_payload_size(std::span<const std::uint8_
 void PostProcessorCommandGroup::print_command_response(std::string_view command,
                                                         const CommandResponse &response) const {
     print_section("post-processor-cmd " + std::string(command));
-    print_field("status") << static_cast<unsigned>(response.status) << '\n';
+    print_field("status") << "0x" << hex(response.status, 2) << " (" << post_processor_status_name(response.status)
+                           << ")\n";
     if (!response.payload.empty()) {
         print_field("payload") << response.payload.size() << " bytes\n";
         print_hex_dump(response.payload);
@@ -96,15 +96,13 @@ void PostProcessorCommandGroup::print_command_response(std::string_view command,
 const char *PostProcessorCommandGroup::usb_speed_name(std::uint8_t speed) {
     switch (speed) {
     case 0:
-        return "LS";
+        return "UNKNOWN";
     case 1:
         return "FS";
     case 2:
         return "HS";
     case 3:
         return "SS";
-    case 4:
-        return "SSP";
     default:
         return "UNKNOWN";
     }
@@ -117,9 +115,9 @@ const char *PostProcessorCommandGroup::stream_state_name(std::uint8_t state) {
     case 1:
         return "OPENING";
     case 2:
-        return "STREAMING";
+        return "OPEN";
     case 3:
-        return "STOPPING";
+        return "CLOSING";
     case 4:
         return "ERROR";
     default:
@@ -138,6 +136,39 @@ const char *PostProcessorCommandGroup::stream_action_name(std::uint8_t action) {
     }
 }
 
+const char *PostProcessorCommandGroup::post_processor_status_name(std::uint8_t status) {
+    switch (status) {
+    case 0x00:
+        return "OK";
+    case 0x01:
+        return "BAD_COMMAND";
+    case 0x02:
+        return "BAD_LENGTH";
+    case 0x03:
+        return "BAD_PARAM";
+    case 0x04:
+        return "BUSY";
+    case 0x05:
+        return "I2C_ERROR";
+    case 0x06:
+        return "NOT_IMPLEMENTED";
+    case 0x07:
+        return "NOT_READY";
+    case 0x08:
+        return "STALE_TRANSACTION";
+    case 0x09:
+        return "DENIED";
+    case 0x0a:
+        return "STATE_CONFLICT";
+    case 0x0b:
+        return "TIMEOUT";
+    case 0x0c:
+        return "INTERNAL_ERROR";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 std::string PostProcessorCommandGroup::stream_flags_name(std::uint8_t flags) {
     std::string names;
     const auto append = [&names](const char *name) {
@@ -145,8 +176,22 @@ std::string PostProcessorCommandGroup::stream_flags_name(std::uint8_t flags) {
             names += "|";
         names += name;
     };
+    if (flags & 0x01)
+        append("CONFIGURED");
+    if (flags & 0x02)
+        append("COMMANDED_OPEN");
+    if (flags & 0x04)
+        append("PATH_ACTIVE");
+    if (flags & 0x08)
+        append("ACTION_BUSY");
+    if (flags & 0x10)
+        append("MIPI_LOCK");
     if (flags & 0x20)
         append("EP_READY");
+    if (flags & 0x40)
+        append("ERROR");
+    if (flags & 0x80)
+        append("FORCED_CLOSED");
     return names;
 }
 
@@ -159,22 +204,24 @@ void PostProcessorCommandGroup::print_stream_status(std::string_view name, std::
     const auto flags = data[1];
     const auto last_error = data[2];
     const auto format = data[3];
-    const auto size = read_le_u16(data, 4);
-    const auto interval = read_le_u16(data, 6);
-    const auto control_gen = read_le32(data.subspan(8));
-    const auto last_sequence = data[12];
-    const auto last_action = data[13];
-    const auto mipi_error_count = read_le32(data.subspan(14));
-    const auto dropped_frame_count = read_le32(data.subspan(18));
+    const auto frame_width = read_le_u16(data, 4);
+    const auto height = read_le_u16(data, 6);
+    const auto interval = read_le32(data.subspan(8));
+    const auto control_gen = read_le_u16(data, 12);
+    const auto last_sequence = data[14];
+    const auto last_action = data[15];
+    const auto mipi_error_count = read_le32(data.subspan(16));
+    const auto dropped_frame_count = read_le32(data.subspan(20));
 
     print_field("state", width, indent) << static_cast<unsigned>(state) << " (" << stream_state_name(state) << ")\n";
     const auto flags_name = stream_flags_name(flags);
     print_field("flags", width, indent) << "0x" << hex(flags, 2)
                                         << (flags_name.empty() ? "" : " (" + flags_name + ")") << '\n';
-    print_field("last_error", width, indent) << "0x" << hex(last_error, 2) << " (" << status_name(last_error)
-                                             << ")\n";
+    print_field("last_error", width, indent) << "0x" << hex(last_error, 2) << " ("
+                                             << post_processor_status_name(last_error) << ")\n";
     print_field("format", width, indent) << static_cast<unsigned>(format) << '\n';
-    print_field("size", width, indent) << "0x" << hex(size, 4) << '\n';
+    print_field("width", width, indent) << frame_width << '\n';
+    print_field("height", width, indent) << height << '\n';
     print_field("interval", width, indent) << interval << " (fps=" << std::fixed << std::setprecision(3)
                                            << (interval == 0 ? 0.0 : 10000000.0 / interval) << std::defaultfloat
                                            << ")\n";
@@ -186,7 +233,8 @@ void PostProcessorCommandGroup::print_stream_status(std::string_view name, std::
     print_field("dropped_frames", width, indent) << dropped_frame_count << '\n';
 }
 
-void PostProcessorCommandGroup::print_get_status(std::span<const std::uint8_t> payload) const {    constexpr int width = 17;
+void PostProcessorCommandGroup::print_get_status(std::span<const std::uint8_t> payload) const {
+    constexpr int width = 17;
 
     print_section("get-status");
     print_field("protocol_version", width) << static_cast<unsigned>(payload[0]) << '\n';
@@ -214,7 +262,7 @@ std::string PostProcessorCommandGroup::usb_speed_caps_name(std::uint8_t caps) {
         std::uint8_t bit;
         const char *name;
     };
-    constexpr Entry entries[] = {{0x01, "FS"}, {0x02, "HS"}, {0x04, "SS"}, {0x08, "SSP"}};
+    constexpr Entry entries[] = {{0x01, "FS"}, {0x02, "HS"}, {0x04, "SS"}};
     std::string names;
     for (const auto &entry : entries) {
         if (!(caps & entry.bit))
@@ -232,11 +280,10 @@ std::string PostProcessorCommandGroup::command_mask_name(std::uint32_t mask) {
         const char *name;
     };
     constexpr Entry entries[] = {
-        {0x01, "PING"},         {0x02, "GET_STATUS"},        {0x03, "GET_CAPS"},
-        {0x10, "SET_PIPELINE_CONFIG"}, {0x11, "STREAM_CONTROL"},  {0x12, "GET_STREAM_STATE"},
-        {0x13, "RESET_PIPELINE"},      {0x14, "GET_ACTION_STATUS"}, {0x15, "SET_TEST_PATTERN"},
-        {0x16, "GET_STREAM_CAPS"},     {0x17, "GET_STATISTICS"},    {0x18, "CLEAR_STATISTICS"},
-        {0x19, "RESET_USB"},           {0x1a, "OTA_CONTROL"},
+        {0x01, "PING"},          {0x02, "GET_STATUS"},       {0x03, "GET_CAPS"},
+        {0x11, "STREAM_CONTROL"}, {0x12, "GET_STREAM_STATE"}, {0x13, "RESET_PIPELINE"},
+        {0x15, "SET_TEST_PATTERN"}, {0x16, "GET_STREAM_CAPS"}, {0x17, "GET_STATISTICS"},
+        {0x18, "CLEAR_STATISTICS"}, {0x19, "RESET_USB"},       {0x1a, "OTA_CONTROL"},
     };
     std::string names;
     for (const auto &entry : entries) {
@@ -265,6 +312,67 @@ void PostProcessorCommandGroup::print_get_caps(std::span<const std::uint8_t> pay
                                        << (mask_name.empty() ? "" : ": " + mask_name) << '\n';
 }
 
+void PostProcessorCommandGroup::print_get_stream_caps(std::span<const std::uint8_t> payload) const {
+    constexpr int width = 20;
+    print_section("get-stream-caps");
+    print_field("caps_version", width) << static_cast<unsigned>(payload[0]) << '\n';
+    print_field("stream_count", width) << static_cast<unsigned>(payload[1]) << '\n';
+    print_field("format_record_count", width) << static_cast<unsigned>(payload[2]) << '\n';
+    print_field("frame_record_count", width) << static_cast<unsigned>(payload[3]) << '\n';
+    if (payload[0] != 1 || payload[1] != 2 || payload[2] != 4 || payload[3] != 4)
+        throw std::runtime_error("get-stream-caps contains unsupported record counts");
+
+    constexpr std::size_t stream_offset = 4;
+    constexpr std::size_t stream_record_size = 4;
+    for (std::size_t index = 0; index < payload[1]; ++index) {
+        const auto offset = stream_offset + index * stream_record_size;
+        print_section("stream " + std::to_string(index), 2);
+        print_field("stream_id", width, 4) << static_cast<unsigned>(payload[offset]) << '\n';
+        print_field("format_count", width, 4) << static_cast<unsigned>(payload[offset + 1]) << '\n';
+        print_field("default_format_index", width, 4) << static_cast<unsigned>(payload[offset + 2]) << '\n';
+        print_field("flags", width, 4) << "0x" << hex(payload[offset + 3], 2) << '\n';
+    }
+
+    constexpr std::size_t formats_offset = 12;
+    constexpr std::size_t format_record_size = 11;
+    constexpr std::array<const char *, 4> source_names{"Color", "IR1", "Depth", "IR2"};
+    for (std::size_t index = 0; index < payload[2]; ++index) {
+        const auto offset = formats_offset + index * format_record_size;
+        const auto source = payload[offset + 2];
+        std::string fourcc;
+        for (std::size_t byte = 0; byte < 4; ++byte)
+            fourcc.push_back(static_cast<char>(payload[offset + 3 + byte]));
+        print_section("format " + std::to_string(index), 2);
+        print_field("stream_id", width, 4) << static_cast<unsigned>(payload[offset]) << '\n';
+        print_field("format_index", width, 4) << static_cast<unsigned>(payload[offset + 1]) << '\n';
+        print_field("source_type", width, 4) << static_cast<unsigned>(source)
+                                              << (source < source_names.size() ? " (" + std::string(source_names[source]) + ")" : "")
+                                              << '\n';
+        print_field("fourcc", width, 4) << fourcc << '\n';
+        print_field("bits_per_pixel", width, 4) << static_cast<unsigned>(payload[offset + 7]) << '\n';
+        print_field("frame_count", width, 4) << static_cast<unsigned>(payload[offset + 8]) << '\n';
+        print_field("default_frame_index", width, 4) << static_cast<unsigned>(payload[offset + 9]) << '\n';
+        print_field("flags", width, 4) << "0x" << hex(payload[offset + 10], 2) << '\n';
+    }
+
+    constexpr std::size_t frames_offset = 56;
+    constexpr std::size_t frame_record_size = 24;
+    for (std::size_t index = 0; index < payload[3]; ++index) {
+        const auto offset = frames_offset + index * frame_record_size;
+        print_section("frame " + std::to_string(index), 2);
+        print_field("stream_id", width, 4) << static_cast<unsigned>(payload[offset]) << '\n';
+        print_field("format_index", width, 4) << static_cast<unsigned>(payload[offset + 1]) << '\n';
+        print_field("frame_index", width, 4) << static_cast<unsigned>(payload[offset + 2]) << '\n';
+        print_field("frame_interval_type", width, 4) << static_cast<unsigned>(payload[offset + 3]) << '\n';
+        print_field("width", width, 4) << read_le_u16(payload, offset + 4) << '\n';
+        print_field("height", width, 4) << read_le_u16(payload, offset + 6) << '\n';
+        print_field("default_interval", width, 4) << read_le32(payload.subspan(offset + 8)) << '\n';
+        print_field("min_interval", width, 4) << read_le32(payload.subspan(offset + 12)) << '\n';
+        print_field("max_interval", width, 4) << read_le32(payload.subspan(offset + 16)) << '\n';
+        print_field("interval_step", width, 4) << read_le32(payload.subspan(offset + 20)) << '\n';
+    }
+}
+
 bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector<std::string> &args) {
     if (name == "post-processor-raw-write") {
         if (args.empty())
@@ -277,16 +385,37 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
         const auto response = execute(GMSL_COMMAND_POST_PROCESSOR_RAW_READ, le16(parse_u16(args[0])));
         if (response.status == 0 && !response.payload.empty()) {
             print_section("post-processor-raw-read");
-            print_field("data") << ascii(response.payload) << '\n';
+            print_field("payload") << response.payload.size() << " bytes\n";
+            print_hex_dump(response.payload);
         }
+        return true;
+    }
+    if (name == "post-processor-register-write") {
+        require_args(args, 2, "post-processor-register-write requires <register> <value>");
+        auto reg = parse_byte(args[0]);
+        auto value = parse_byte_list(std::span<const std::string>(args).subspan(1));
+        write_register(reg, value);
+        return true;
+    }
+    if (name == "post-processor-register-read") {
+        require_args(args, 2, "post-processor-register-read requires <register> <size>");
+        auto reg = parse_byte(args[0]);
+        auto size = parse_byte(args[1]);
+        auto response = read_register(reg, size);
+        print_section("post-processor-register-read");
+        print_field("payload") << response.size() << " bytes\n";
+        print_hex_dump(response);
         return true;
     }
     if (name == "post-processor-cmd") {
         if (args.empty())
             throw std::invalid_argument("post-processor-cmd requires cmd <arg>");
         if (args[0] == "ping") {
-            const auto response = execute_command(0x01, parse_byte_list(std::span<const std::string>(args).subspan(1)));
+            const auto payload = parse_byte_list(std::span<const std::string>(args).subspan(1));
+            const auto response = execute_command(0x01, payload);
             print_command_response("ping", response);
+            if (response.status == 0)
+                require_payload_size(response.payload, payload.size(), "ping");
             return true;
         }
         if (args[0] == "get-status") {
@@ -307,23 +436,24 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
             }
             return true;
         }
-        if (args[0] == "set-pipeline-config") {
-            require_args(args, 5, "post-processor-cmd set-pipeline-config requires <control_gen> <pipeline_mask> <config_id> <config_flags>");
-            auto payload = le32(parse_u32(args[1]));
-            payload.push_back(parse_byte(args[2]));
-            append_to(payload, le16(parse_u16(args[3])));
-            payload.push_back(parse_byte(args[4]));
-            const auto response = execute_command(0x10, std::move(payload));
-            print_command_response("set-pipeline-config", response);
-            return true;
-        }
         if (args[0] == "stream-control") {
-            require_args(args, 4, "post-processor-cmd stream-control requires <control_gen> <stream_id> <enable>");
-            auto payload = le32(parse_u32(args[1]));
-            payload.push_back(parse_byte(args[2]));
-            payload.push_back(parse_byte(args[3]));
+            require_args(args, 8, "post-processor-cmd stream-control requires <stream_id> <action> <format> <width> <height> <frame_interval> <flags>");
+            auto payload = std::vector<std::uint8_t>{parse_byte(args[1]), parse_byte(args[2]), parse_byte(args[3])};
+            append_to(payload, le16(parse_u16(args[4])));
+            append_to(payload, le16(parse_u16(args[5])));
+            append_to(payload, le32(parse_u32(args[6])));
+            payload.push_back(parse_byte(args[7]));
             const auto response = execute_command(0x11, std::move(payload));
             print_command_response("stream-control", response);
+            if (response.status == 0) {
+                if (response.payload.size() != 4 && response.payload.size() != 6)
+                    throw std::runtime_error("stream-control response must contain 4 or 6 bytes");
+                const auto data = std::span<const std::uint8_t>(response.payload);
+                print_field("stream_id") << static_cast<unsigned>(data[0]) << '\n';
+                print_field("action") << static_cast<unsigned>(data[1]) << " (" << stream_action_name(data[1]) << ")\n";
+                print_field("result_state") << static_cast<unsigned>(data[2]) << '\n';
+                print_field("stream_flags") << "0x" << hex(data[3], 2) << '\n';
+            }
             return true;
         }
         if (args[0] == "get-stream-state") {
@@ -331,86 +461,96 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
             const auto response = execute_command(0x12, {parse_byte(args[1])});
             print_command_response("get-stream-state", response);
             if (response.status == 0) {
-                require_payload_size(response.payload, 8, "get-stream-state");
+                require_payload_size(response.payload, 24, "get-stream-state");
                 const auto data = std::span<const std::uint8_t>(response.payload);
-                print_field("stream_id") << static_cast<unsigned>(data[0]) << '\n';
-                print_field("command_enable") << static_cast<unsigned>(data[1]) << '\n';
-                print_field("actual_enable") << static_cast<unsigned>(data[2]) << '\n';
-                print_field("action_state") << static_cast<unsigned>(data[3]) << '\n';
-                print_field("action_id") << read_le32(data.subspan(4)) << '\n';
+                print_stream_status("stream-status", data);
             }
             return true;
         }
         if (args[0] == "reset-pipeline") {
-            require_args(args, 3, "post-processor-cmd reset-pipeline requires <control_gen> <pipeline_mask>");
-            auto payload = le32(parse_u32(args[1]));
-            payload.push_back(parse_byte(args[2]));
+            require_args(args, 2, "post-processor-cmd reset-pipeline requires <stream_id>");
+            auto payload = std::vector<std::uint8_t>{parse_byte(args[1])};
             const auto response = execute_command(0x13, std::move(payload));
             print_command_response("reset-pipeline", response);
-            return true;
-        }
-        if (args[0] == "get-action-status") {
-            require_args(args, 2, "post-processor-cmd get-action-status requires <action_id>");
-            const auto response = execute_command(0x14, le32(parse_u32(args[1])));
-            print_command_response("get-action-status", response);
             if (response.status == 0) {
-                require_payload_size(response.payload, 6, "get-action-status");
-                const auto data = std::span<const std::uint8_t>(response.payload);
-                print_field("action_id") << read_le32(data) << '\n';
-                print_field("action_state") << static_cast<unsigned>(data[4]) << '\n';
-                print_field("result_status") << static_cast<unsigned>(data[5]) << '\n';
+                require_payload_size(response.payload, 2, "reset-pipeline");
+                print_field("stream_id") << static_cast<unsigned>(response.payload[0]) << '\n';
+                print_field("state") << static_cast<unsigned>(response.payload[1]) << " ("
+                                      << stream_state_name(response.payload[1]) << ")\n";
             }
             return true;
         }
         if (args[0] == "set-test-pattern") {
-            require_args(args, 5, "post-processor-cmd set-test-pattern requires <control_gen> <stream_id> <enable> <pattern_id>");
-            auto payload = le32(parse_u32(args[1]));
-            payload.push_back(parse_byte(args[2]));
-            payload.push_back(parse_byte(args[3]));
-            payload.push_back(parse_byte(args[4]));
+            require_args(args, 3, "post-processor-cmd set-test-pattern requires <stream_id> <enable>");
+            auto payload = std::vector<std::uint8_t>{parse_byte(args[1]), parse_byte(args[2])};
             const auto response = execute_command(0x15, std::move(payload));
             print_command_response("set-test-pattern", response);
+            if (response.status == 0)
+                require_payload_size(response.payload, 2, "set-test-pattern");
+            return true;
+        }
+        if (args[0] == "get-stream-caps") {
+            require_args(args, 1, "post-processor-cmd get-stream-caps takes no arguments");
+            const auto response = execute_command(0x16, {});
+            print_command_response("get-stream-caps", response);
+            if (response.status == 0) {
+                require_payload_size(response.payload, 152, "get-stream-caps");
+                print_get_stream_caps(response.payload);
+            }
             return true;
         }
         if (args[0] == "get-statistics") {
-            require_args(args, 2, "post-processor-cmd get-statistics requires <source_mask>");
-            const auto response = execute_command(0x17, {parse_byte(args[1])});
+            require_args(args, 1, "post-processor-cmd get-statistics takes no arguments");
+            const auto response = execute_command(0x17, {});
             print_command_response("get-statistics", response);
             if (response.status == 0) {
-                require_payload_size(response.payload, 17, "get-statistics");
+                require_payload_size(response.payload, 24, "get-statistics");
                 const auto data = std::span<const std::uint8_t>(response.payload);
-                print_field("source_mask") << static_cast<unsigned>(data[0]) << '\n';
-                print_field("mipi_count") << read_le32(data.subspan(1)) << '\n';
-                print_field("iebm_count") << read_le32(data.subspan(5)) << '\n';
-                print_field("usb_count") << read_le32(data.subspan(9)) << '\n';
-                print_field("i2c_count") << read_le32(data.subspan(13)) << '\n';
+                print_field("request_count") << read_le32(data) << '\n';
+                print_field("response_count") << read_le32(data.subspan(4)) << '\n';
+                print_field("duplicate_count") << read_le32(data.subspan(8)) << '\n';
+                print_field("bad_frame_count") << read_le32(data.subspan(12)) << '\n';
+                print_field("busy_count") << read_le32(data.subspan(16)) << '\n';
+                print_field("i2c_error_count") << read_le32(data.subspan(20)) << '\n';
             }
             return true;
         }
         if (args[0] == "clear-statistics") {
-            require_args(args, 2, "post-processor-cmd clear-statistics requires <source_mask>");
-            const auto response = execute_command(0x18, {parse_byte(args[1])});
+            require_args(args, 1, "post-processor-cmd clear-statistics takes no arguments");
+            const auto response = execute_command(0x18, {});
             print_command_response("clear-statistics", response);
+            if (response.status == 0)
+                require_payload_size(response.payload, 0, "clear-statistics");
             return true;
         }
         if (args[0] == "reset-usb") {
-            require_args(args, 3, "post-processor-cmd reset-usb requires <control_gen> <confirm>");
-            auto payload = le32(parse_u32(args[1]));
-            payload.push_back(parse_byte(args[2]));
-            const auto response = execute_command(0x19, std::move(payload));
+            require_args(args, 1, "post-processor-cmd reset-usb takes no arguments");
+            const auto response = execute_command(0x19, {});
             print_command_response("reset-usb", response);
+            if (response.status == 0)
+                require_payload_size(response.payload, 0, "reset-usb");
             return true;
         }
-        if (args[0] == "debug-reg-access") {
-            require_args(args, 4, "post-processor-cmd debug-reg-access requires <operation> <address> <value>");
-            auto payload = std::vector<std::uint8_t>{parse_byte(args[1])};
-            append_to(payload, le32(parse_u32(args[2])));
-            append_to(payload, le32(parse_u32(args[3])));
-            const auto response = execute_command(0x7f, std::move(payload));
-            print_command_response("debug-reg-access", response);
-            if (response.status == 0) {
-                require_payload_size(response.payload, 4, "debug-reg-access");
-                print_field("value") << read_le32(response.payload) << '\n';
+        if (args[0] == "ota-control") {
+            if (args.size() < 2)
+                throw std::invalid_argument("post-processor-cmd ota-control requires <ota_payload_byte...>");
+            const auto payload = parse_byte_list(std::span<const std::string>(args).subspan(1));
+            const auto response = execute_command(0x1a, payload);
+            print_command_response("ota-control", response);
+            if (response.payload.size() == 24) {
+                const auto data = std::span<const std::uint8_t>(response.payload);
+                print_field("ota_version") << static_cast<unsigned>(data[0]) << '\n';
+                print_field("state") << static_cast<unsigned>(data[1]) << '\n';
+                print_field("last_op") << "0x" << hex(data[2], 2) << '\n';
+                print_field("last_result") << static_cast<unsigned>(data[3]) << '\n';
+                print_field("session_id") << read_le32(data.subspan(4)) << '\n';
+                print_field("next_offset") << read_le32(data.subspan(8)) << '\n';
+                print_field("image_size") << read_le32(data.subspan(12)) << '\n';
+                print_field("running_slot") << static_cast<unsigned>(data[16]) << '\n';
+                print_field("target_slot") << static_cast<unsigned>(data[17]) << '\n';
+                print_field("owner") << static_cast<unsigned>(data[18]) << '\n';
+                print_field("flags") << "0x" << hex(data[19], 2) << '\n';
+                print_field("bootinfo_generation") << read_le32(data.subspan(20)) << '\n';
             }
             return true;
         }

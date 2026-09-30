@@ -329,19 +329,20 @@ Commands:
     isp-subsnr-write <reg16> <value16>
     post-processor-raw-write <byte...>
     post-processor-raw-read <size>
+    post-processor-raw-write <reg> <byte...>
+    post-processor-raw-read <reg> <size>
     post-processor-cmd ping [payload_byte...]
     post-processor-cmd get-status
     post-processor-cmd get-caps
-    post-processor-cmd set-pipeline-config <control_gen> <pipeline_mask> <config_id> <config_flags>
-    post-processor-cmd stream-control <control_gen> <stream_id> <enable>
+    post-processor-cmd stream-control <stream_id> <action> <format> <width> <height> <frame_interval> <flags>
     post-processor-cmd get-stream-state <stream_id>
-    post-processor-cmd reset-pipeline <control_gen> <pipeline_mask>
-    post-processor-cmd get-action-status <action_id>
-    post-processor-cmd set-test-pattern <control_gen> <stream_id> <enable> <pattern_id>
-    post-processor-cmd get-statistics <source_mask>
-    post-processor-cmd clear-statistics <source_mask>
-    post-processor-cmd reset-usb <control_gen> <confirm>
-    post-processor-cmd debug-reg-access <operation> <address> <value>
+    post-processor-cmd reset-pipeline <stream_id>
+    post-processor-cmd set-test-pattern <stream_id> <enable>
+    post-processor-cmd get-stream-caps
+    post-processor-cmd get-statistics
+    post-processor-cmd clear-statistics
+    post-processor-cmd reset-usb
+    post-processor-cmd ota-control <ota_payload_byte...>
     imu-read <count>
     temp-read <0|1|2|3|left|right|laser|laser2>
     set-auto-userset-slot <slot>

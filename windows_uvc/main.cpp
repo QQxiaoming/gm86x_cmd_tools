@@ -22,7 +22,6 @@ Global options:
     -v, --vid <hex>         USB vendor id, default 0x2ac1
     -p, --pid <hex>         USB product id, default 0xfd00
     -n, --index <decimal>   matching device index, default 0
-    -i, --interface <hex>   UVC VideoControl interface, default is auto-detected
     -x, --debug             enable verbose libusb/control-transfer logging
 
 UVC I2C_FORWARD uses fixed XU Control Selector 0x05.

@@ -34,9 +34,11 @@ private:
     void print_get_status(std::span<const std::uint8_t> payload) const;
     void print_stream_status(std::string_view name, std::span<const std::uint8_t> data) const;
     void print_get_caps(std::span<const std::uint8_t> payload) const;
+    void print_get_stream_caps(std::span<const std::uint8_t> payload) const;
     static const char *usb_speed_name(std::uint8_t speed);
     static const char *stream_state_name(std::uint8_t state);
     static const char *stream_action_name(std::uint8_t action);
+    static const char *post_processor_status_name(std::uint8_t status);
     static std::string stream_flags_name(std::uint8_t flags);
     static std::string usb_speed_caps_name(std::uint8_t caps);
     static std::string command_mask_name(std::uint32_t mask);
