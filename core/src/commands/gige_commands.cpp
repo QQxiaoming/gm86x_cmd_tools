@@ -6,6 +6,7 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <utility>
 
 namespace gm86x::detail {
 
@@ -43,7 +44,23 @@ void GigeCommandGroup::print_access_map_count(const Response &response) {
     }
 }
 
-void GigeCommandGroup::print_access_map_page(std::size_t start_index, const Response &response, bool skipPrintHeader) {
+std::size_t GigeCommandGroup::access_map_address_column_width(const Response &response) {
+    if (response.status != 0)
+        return 0;
+    if (response.payload.size() % 5 != 0)
+        throw std::runtime_error("access-map payload length is not a multiple of 5");
+    const auto entries = response.payload.size() / 5;
+    std::size_t width = 0;
+    for (std::size_t index = 0; index < entries; ++index) {
+        const auto offset = index * 5;
+        const auto address = read_le32(std::span<const std::uint8_t>(response.payload).subspan(offset));
+        width = std::max(width, std::string("addr=" + regaddr_label(address)).size());
+    }
+    return width + 2;
+}
+
+void GigeCommandGroup::print_access_map_page(std::size_t start_index, const Response &response,
+                                             bool skipPrintHeader, std::size_t addressColumnWidth) {
     if (response.status != 0)
         return;
     if (response.payload.size() % 5 != 0)
@@ -54,6 +71,8 @@ void GigeCommandGroup::print_access_map_page(std::size_t start_index, const Resp
         print_field("start_index") << start_index << '\n';
         print_field("entry_count") << entries << '\n';
     }
+    if (addressColumnWidth == 0)
+        addressColumnWidth = access_map_address_column_width(response);
     for (std::size_t index = 0; index < entries; ++index) {
         const auto offset = index * 5;
         const auto address = read_le32(std::span<const std::uint8_t>(response.payload).subspan(offset));
@@ -66,10 +85,10 @@ void GigeCommandGroup::print_access_map_page(std::size_t start_index, const Resp
         if (access.empty())
             access = "none";
         auto &output = print_field("[" + std::to_string(start_index + index) + "]", 11, 4);
-        output << "addr=0x" << hex(address, 8) << " attr=0x" << hex(attr, 2) << " (" << access << ")";
-        const auto name = regaddr_name(address);
-        if (!name.empty())
-            output << " name=" << name;
+        output << std::left << std::setw(static_cast<int>(addressColumnWidth))
+               << ("addr=" + regaddr_label(address))
+               << "attr=0x" << hex(attr, 2)
+               << " (" << std::left << std::setw(10) << access << std::right << ")";
         output << '\n';
     }
 }
@@ -142,12 +161,24 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
                     print_section("access-map-page");
                     print_field("start_index") << start_index << '\n';
                     print_field("entry_count") << count << '\n';
+                    std::vector<std::pair<std::size_t, Response>> pages;
                     for (std::uint16_t i = 0; i < count; i += 45) {
                         const auto page_count = std::min(static_cast<unsigned>(count - i), 45u);
                         auto page_payload = std::vector<std::uint8_t>{1};
                         append_to(page_payload, le16(start_index + i));
                         page_payload.push_back(static_cast<std::uint8_t>(page_count));
-                        print_access_map_page(start_index + i, execute(GMSL_COMMAND_GIGE_CAM_GET_ACCESS_MAP, page_payload, false, false), true);
+                        pages.emplace_back(
+                            start_index + i,
+                            execute(GMSL_COMMAND_GIGE_CAM_GET_ACCESS_MAP, page_payload, false, false));
+                    }
+                    std::size_t address_column_width = 0;
+                    for (const auto &[page_start, page] : pages) {
+                        (void)page_start;
+                        address_column_width =
+                            std::max(address_column_width, access_map_address_column_width(page));
+                    }
+                    for (const auto &[page_start, page] : pages) {
+                        print_access_map_page(page_start, page, true, address_column_width);
                     }
                 } else {
                     print_access_map_page(0, execute(GMSL_COMMAND_GIGE_CAM_GET_ACCESS_MAP));

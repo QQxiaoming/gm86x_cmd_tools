@@ -64,6 +64,14 @@ bool ends_with(const std::string &text, const std::string &suffix)
         && text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
+bool is_register_name(const std::string &text)
+{
+    if (text.starts_with("Current") && ends_with(text, "_BaseRegAddr")) {
+        return false;
+    }
+    return ends_with(text, "_RegAddr") || ends_with(text, "_BaseRegAddr") || ends_with(text, "_Reg");
+}
+
 std::string normalize(const std::string &text)
 {
     std::string result;
@@ -188,7 +196,7 @@ std::vector<CsvRegister> parse_register_csv(
                 }
             }
 
-            if (ends_with(row[0], "_RegAddr")) {
+            if (is_register_name(row[0])) {
                 CsvRegister reg;
                 reg.name = row[0];
                 reg.offset = offset;
@@ -556,6 +564,30 @@ std::string gm86x::regaddr_name(std::uint32_t address)
 {
     static const RegisterDatabase database({}, "gmsl");
     const auto names = database.exact_names(address);
+
+    if (names.size() > 1) {
+        const auto separator = names.front().find(" + ");
+        if (separator != std::string::npos) {
+            const auto category = names.front().substr(0, separator);
+            const auto same_category = std::all_of(
+                names.begin(), names.end(), [&](const std::string &name) {
+                    return name.starts_with(category + " + ");
+                });
+            if (same_category) {
+                std::ostringstream output;
+                output << category << " + (";
+                for (size_t index = 0; index < names.size(); ++index) {
+                    if (index != 0) {
+                        output << " / ";
+                    }
+                    output << names[index].substr(separator + 3);
+                }
+                output << ')';
+                return output.str();
+            }
+        }
+    }
+
     std::ostringstream output;
     for (size_t index = 0; index < names.size(); ++index) {
         if (index != 0) {
@@ -564,6 +596,16 @@ std::string gm86x::regaddr_name(std::uint32_t address)
         output << names[index];
     }
     return output.str();
+}
+
+std::string gm86x::regaddr_label(std::uint32_t address)
+{
+    std::string label = hex32(address);
+    const auto name = regaddr_name(address);
+    if (!name.empty()) {
+        label += " [ " + name + " ]";
+    }
+    return label;
 }
 
 int gm86x::run_regaddr_convert(int argc, char **argv)

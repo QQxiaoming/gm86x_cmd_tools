@@ -9,4 +9,8 @@ namespace gm86x {
 // Multiple names are separated by " / ". An unknown address returns an empty string.
 std::string regaddr_name(std::uint32_t address);
 
+// Formats a full GigE register address as "0xXXXXXXXX [ name ]".
+// The name suffix is omitted when the address is unknown.
+std::string regaddr_label(std::uint32_t address);
+
 } // namespace gm86x

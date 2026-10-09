@@ -1,6 +1,7 @@
 #include "partition_commands.hpp"
 
 #include "bytes.hpp"
+#include "regaddr_lookup.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -259,9 +260,21 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
         if (list) {
             print_section("metadata");
             print_field("entry_count") << entries.size() << '\n';
-            for (std::size_t index = 0; index < entries.size(); ++index)
-                print_field("[" + std::to_string(index) + "]", 11, 4)
-                    << "addr=0x" << hex(entries[index].address, 8) << " size=" << entries[index].data.size() << '\n';
+            std::vector<std::string> address_labels;
+            address_labels.reserve(entries.size());
+            std::size_t address_column_width = 0;
+            for (const auto &entry : entries) {
+                address_labels.push_back("addr=" + regaddr_label(entry.address));
+                address_column_width = std::max(address_column_width, address_labels.back().size());
+            }
+            address_column_width += 2;
+            for (std::size_t index = 0; index < entries.size(); ++index) {
+                auto &output = print_field("[" + std::to_string(index) + "]", 11, 4);
+                output << std::left << std::setw(static_cast<int>(address_column_width))
+                       << address_labels[index]
+                       << "size="
+                       << entries[index].data.size() << '\n';
+            }
         } else {
             const auto address = parse_u32(args.back());
             const auto found = std::find_if(entries.begin(), entries.end(),
@@ -269,10 +282,9 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
             if (found == entries.end())
                 throw std::runtime_error("metadata address not found");
             print_section("metadata");
-            print_field("address") << "0x" << hex(address, 8) << '\n';
+            print_field("address") << regaddr_label(address) << '\n';
             print_field("length") << found->data.size() << " bytes\n";
-            print_field("hex") << hex_bytes(found->data) << '\n';
-            print_field("ascii") << ascii(found->data) << '\n';
+            print_hex_dump(found->data);
         }
         return true;
     }

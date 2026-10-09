@@ -1,5 +1,7 @@
 #include "commands.hpp"
+
 #include "bytes.hpp"
+#include "regaddr_lookup.hpp"
 
 #include "commands/basic_commands.hpp"
 #include "commands/gige_commands.hpp"
@@ -229,6 +231,13 @@ void CommandGroup::print_command(std::uint8_t sequence, std::uint8_t opcode,
     print_field("sequence") << "0x" << hex(sequence, 2) << '\n';
     print_field("opcode") << "0x" << hex(opcode, 2) << " (" << opcode_name(opcode) << ")\n";
     print_field("payload") << payload.size() << " bytes\n";
+    if ((opcode == GMSL_COMMAND_GIGE_CAM_READ_REGISTER
+         || opcode == GMSL_COMMAND_GIGE_CAM_WRITE_REGISTER)
+        && payload.size() >= 6) {
+        print_field("addr") << regaddr_label(read_le32(payload)) << '\n';
+        const auto size = static_cast<unsigned>(payload[4] | payload[5] << 8);
+        print_field("reg_size") << size << " bytes\n";
+    }
     print_hex_dump(payload);
 }
 
