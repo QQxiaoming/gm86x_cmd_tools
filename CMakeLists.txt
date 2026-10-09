@@ -41,40 +41,7 @@ function(gm86x_enable_warnings target)
     endif()
 endfunction()
 
-set(PERCIPIO_REGADDR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tools/percipio_regaddr_convert")
-
-add_library(percipio_regaddr STATIC
-    "${PERCIPIO_REGADDR_DIR}/src/regaddr_convert.cpp"
-)
-target_include_directories(percipio_regaddr
-    PUBLIC core/include
-    PRIVATE "${PERCIPIO_REGADDR_DIR}/src"
-)
-gm86x_enable_warnings(percipio_regaddr)
-
-add_executable(regaddr_convert
-    "${PERCIPIO_REGADDR_DIR}/test/regaddr_convert_main.cpp"
-)
-target_include_directories(regaddr_convert PRIVATE "${PERCIPIO_REGADDR_DIR}/src")
-target_link_libraries(regaddr_convert PRIVATE percipio_regaddr)
-gm86x_enable_warnings(regaddr_convert)
-
-# The checked-in header keeps normal and standalone builds Python/CSV independent.
-# Invoke this target explicitly after changing TYGenICamReg register CSV files.
-set(PERCIPIO_REGADDR_CSV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../TYGenICamReg/csv")
-find_package(Python3 QUIET COMPONENTS Interpreter)
-if(Python3_Interpreter_FOUND AND EXISTS "${PERCIPIO_REGADDR_CSV_DIR}")
-    add_custom_target(regenerate_regaddr_csv
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${PERCIPIO_REGADDR_DIR}/tools/gen_regaddr_csv_data.py"
-            --csv-dir "${PERCIPIO_REGADDR_CSV_DIR}"
-            --output "${PERCIPIO_REGADDR_DIR}/src/regaddr_csv_data.h"
-        WORKING_DIRECTORY "${PERCIPIO_REGADDR_DIR}"
-        COMMENT "Regenerating embedded GenICam register CSV data"
-        VERBATIM
-    )
-endif()
+add_subdirectory(tools/percipio_regaddr_convert)
 
 add_library(gm86x_core
     core/src/commands/basic_commands.cpp
