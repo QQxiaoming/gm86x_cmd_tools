@@ -1,6 +1,7 @@
 #include "gige_commands.hpp"
 
 #include "bytes.hpp"
+#include "regaddr_lookup.hpp"
 
 #include <cstring>
 #include <iomanip>
@@ -64,8 +65,12 @@ void GigeCommandGroup::print_access_map_page(std::size_t start_index, const Resp
             access += access.empty() ? "write" : ",write";
         if (access.empty())
             access = "none";
-        print_field("[" + std::to_string(start_index + index) + "]", 11, 4)
-            << "addr=0x" << hex(address, 8) << " attr=0x" << hex(attr, 2) << " (" << access << ")\n";
+        auto &output = print_field("[" + std::to_string(start_index + index) + "]", 11, 4);
+        output << "addr=0x" << hex(address, 8) << " attr=0x" << hex(attr, 2) << " (" << access << ")";
+        const auto name = regaddr_name(address);
+        if (!name.empty())
+            output << " name=" << name;
+        output << '\n';
     }
 }
 
