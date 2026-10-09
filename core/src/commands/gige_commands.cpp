@@ -24,7 +24,7 @@ float GigeCommandGroup::read_float(std::span<const std::uint8_t> data) {
 }
 
 std::vector<std::uint8_t> GigeCommandGroup::gige_header(const std::string &address, std::uint16_t size) {
-    auto payload = le32(parse_u32(address));
+    auto payload = le32(parse_regaddr(address));
     append_to(payload, le16(size));
     return payload;
 }
@@ -108,7 +108,7 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
         return true;
     }
     if (name == "gige-read-u32" || name == "gige-read-i32" || name == "gige-read-float") {
-        require_args(args, 1, name + " requires <addr32>");
+        require_args(args, 1, name + " requires <addr32|name>");
         const auto response = execute(GMSL_COMMAND_GIGE_CAM_READ_REGISTER, gige_header(args[0], 4));
         if (response.status != 0)
             throw std::runtime_error(std::string("GigE read failed: ") + status_name(response.status));
@@ -133,7 +133,7 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
         return true;
     }
     if (name == "gige-write-u32" || name == "gige-write-i32" || name == "gige-write-float") {
-        require_args(args, 2, name + " requires <addr32> <value>");
+        require_args(args, 2, name + " requires <addr32|name> <value>");
         auto payload = gige_header(args[0], 4);
         std::vector<std::uint8_t> value;
         if (name == "gige-write-i32")

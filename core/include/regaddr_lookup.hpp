@@ -5,6 +5,10 @@
 
 namespace gm86x {
 
+// Parses a hexadecimal address or resolves a name using regaddr_convert's
+// built-in GMSL database. Unknown or ambiguous names throw invalid_argument.
+std::uint32_t parse_regaddr(const std::string &text);
+
 // Returns all exact register names for a full GigE register address.
 // Multiple names are separated by " / ". An unknown address returns an empty string.
 std::string regaddr_name(std::uint32_t address);

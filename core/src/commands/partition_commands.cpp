@@ -267,23 +267,21 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
     }
     if (name == "read-calib-addr" || name == "list-calib-addr" || name == "read-userset-addr" ||
         name == "list-userset-addr") {
-        bool readAll = false;
         const bool userset = name.find("userset") != std::string::npos;
         const bool list = name.find("list") != std::string::npos;
+        if (userset ? (args.empty() || args.size() > (list ? 1U : 2U))
+                    : args.size() > (list ? 0U : 1U))
+            throw std::invalid_argument(name + " arguments invalid");
+        const bool readAll = !list && args.size() == (userset ? 1U : 0U);
+        const auto address = !list && !readAll
+                                 ? std::optional<std::uint32_t>(parse_regaddr(args.back()))
+                                 : std::nullopt;
         const auto path =
             (std::filesystem::temp_directory_path() / (userset ? "gm86x-userset.bin" : "gm86x-calib.bin")).string();
         if (userset) {
-            if (list ? args.size() > 1 : args.size() > 2)
-                throw std::invalid_argument(name + " arguments invalid");
             read_partition(GMSL_COMMAND_READ_USERSET_PARTITION, path, 2048, 1024, userset_read_slot(args[0]));
-            if(args.size() == 1)
-                readAll = true;
         } else {
-            if (list ? !args.empty() : args.size() > 1)
-                throw std::invalid_argument(name + " arguments invalid");
             read_partition(GMSL_COMMAND_READ_CALIB_PARTITION, path, 8192, 2048);
-            if(!args.empty())
-                readAll = true;
         }
         const auto entries = parse_entries(read_file(path));
         std::filesystem::remove(path);
@@ -316,16 +314,15 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
                 print_register_value(entries[index].address, entries[index].data, 18);
             }
         } else {
-            const auto address = parse_u32(args.back());
             const auto found = std::find_if(entries.begin(), entries.end(),
-                                            [address](const Entry &entry) { return entry.address == address; });
+                                            [address](const Entry &entry) { return entry.address == *address; });
             if (found == entries.end())
                 throw std::runtime_error("metadata address not found");
             print_section("metadata");
-            print_field("address") << regaddr_label(address) << '\n';
+            print_field("address") << regaddr_label(*address) << '\n';
             print_field("length") << found->data.size() << " bytes\n";
             print_hex_dump(found->data);
-            print_register_value(address, found->data, field_indent);
+            print_register_value(*address, found->data, field_indent);
         }
         return true;
     }

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -8,7 +9,6 @@
 #include <map>
 #include <optional>
 #include <regex>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -70,17 +70,6 @@ bool is_register_name(const std::string &text)
         return false;
     }
     return ends_with(text, "_RegAddr") || ends_with(text, "_BaseRegAddr") || ends_with(text, "_Reg");
-}
-
-std::string normalize(const std::string &text)
-{
-    std::string result;
-    for (unsigned char ch : text) {
-        if (std::isalnum(ch)) {
-            result.push_back(static_cast<char>(std::tolower(ch)));
-        }
-    }
-    return result;
 }
 
 std::vector<std::string> parse_csv_line(const std::string &line)
@@ -339,20 +328,6 @@ public:
             }
         }
 
-        for (const auto &[base, name] : categories_) {
-            const std::string short_name =
-                name.substr(0, name.size() - std::string("Category_RegAddr").size());
-            category_aliases_[normalize(name)] = base;
-            category_aliases_[normalize(
-                name.substr(0, name.size() - std::string("_RegAddr").size()))] = base;
-            category_aliases_[normalize(short_name)] = base;
-        }
-        add_alias("depth", "DepthCategory_RegAddr", category_by_name);
-        add_alias("leftir", "LeftCameraCategory_RegAddr", category_by_name);
-        add_alias("rightir", "RightCameraCategory_RegAddr", category_by_name);
-        add_alias("color", "ColorCameraCategory_RegAddr", category_by_name);
-        add_alias("rgb", "ColorCameraCategory_RegAddr", category_by_name);
-        add_alias("laser", "LightSourceCategory_RegAddr", category_by_name);
     }
 
     size_t size() const { return entries_.size(); }
@@ -362,7 +337,7 @@ public:
         std::ostringstream output;
         const auto category = categories_.find(entry.base);
         if (entry.base != 0 && category != categories_.end()) {
-            output << category->second << " + ";
+            output << category->second << '+';
         }
         output << entry.name;
         return output.str();
@@ -453,73 +428,62 @@ public:
         return output;
     }
 
+    struct NameLookup {
+        std::vector<const Entry *> entries;
+        std::vector<std::string> diagnostics;
+    };
+
+    NameLookup find_name(const std::string &text) const
+    {
+        std::vector<const Entry *> found;
+        for (const auto &entry : entries_) {
+            if (full_name(entry) == text) {
+                found.push_back(&entry);
+            }
+        }
+        if (found.empty()) {
+            return {{}, {"not found; use the exact name printed by regaddr_convert"}};
+        }
+
+        return {std::move(found), {}};
+    }
+
     std::vector<std::string> lookup_name(const std::string &text) const
     {
-        std::optional<uint32_t> category_base;
-        std::string name = trim(text);
-        static const std::regex qualified(
-            R"(^\s*([A-Za-z0-9_-]+)\s*(?:\+|:|\.)\s*([A-Za-z0-9_-]+)\s*$)");
-        std::smatch match;
-        if (std::regex_match(text, match, qualified)) {
-            const std::string category_key = normalize(match[1].str());
-            const auto category = category_aliases_.find(category_key);
-            if (category == category_aliases_.end()) {
-                return {"unknown category: " + match[1].str()};
-            }
-            category_base = category->second;
-            name = match[2].str();
+        const auto result = find_name(text);
+        if (!result.diagnostics.empty()) {
+            return result.diagnostics;
         }
-
-        const std::string key = normalize(name);
-        const std::string full_key =
-            ends_with(key, "regaddr") ? key : key + "regaddr";
-        const auto matches = [&](bool exact) {
-            std::vector<const Entry *> found;
-            for (const auto &entry : entries_) {
-                if (category_base && entry.base != *category_base) {
-                    continue;
-                }
-                const std::string entry_name = normalize(entry.name);
-                const bool name_matches =
-                    exact ? (entry_name == full_key || entry_name == key)
-                          : entry_name.find(key) != std::string::npos;
-                if (name_matches) {
-                    found.push_back(&entry);
-                }
-            }
-            return found;
-        };
-
-        auto found = matches(true);
-        if (found.empty()) {
-            found = matches(false);
-            std::set<std::string> names;
-            for (const auto *entry : found) {
-                names.insert(entry->name);
-            }
-            if (names.size() > 1) {
-                std::vector<std::string> output = {
-                    "no exact match, " + std::to_string(names.size()) + " candidates:"};
-                size_t count = 0;
-                for (const auto &candidate : names) {
-                    if (count++ == 50) {
-                        output.push_back("  ...");
-                        break;
-                    }
-                    output.push_back("  " + candidate);
-                }
-                return output;
-            }
-        }
-        if (found.empty()) {
-            return {"not found"};
-        }
-
         std::vector<std::string> output;
-        for (const auto *entry : found) {
+        for (const auto *entry : result.entries) {
             output.push_back(describe(*entry));
         }
         return output;
+    }
+
+    uint32_t resolve_name(const std::string &text) const
+    {
+        const auto result = find_name(text);
+        if (!result.diagnostics.empty()) {
+            std::ostringstream message;
+            message << "invalid register name: " << text;
+            for (const auto &line : result.diagnostics) {
+                message << '\n' << line;
+            }
+            throw std::invalid_argument(message.str());
+        }
+        const auto address = result.entries.front()->address();
+        if (std::any_of(result.entries.begin(), result.entries.end(),
+                        [address](const Entry *entry) { return entry->address() != address; })) {
+            std::ostringstream message;
+            message << "ambiguous register name: " << text
+                    << "; use <Category_RegAddr>+<Register_RegAddr>";
+            for (const auto *entry : result.entries) {
+                message << '\n' << describe(*entry);
+            }
+            throw std::invalid_argument(message.str());
+        }
+        return address;
     }
 
     void dump() const
@@ -538,20 +502,8 @@ public:
     }
 
 private:
-    void add_alias(
-        const std::string &alias,
-        const std::string &category,
-        const std::unordered_map<std::string, uint32_t> &category_by_name)
-    {
-        const auto found = category_by_name.find(category);
-        if (found != category_by_name.end()) {
-            category_aliases_[alias] = found->second;
-        }
-    }
-
     std::vector<Entry> entries_;
     std::map<uint32_t, std::string> categories_;
-    std::unordered_map<std::string, uint32_t> category_aliases_;
 };
 
 void print_help(const char *program)
@@ -572,8 +524,8 @@ void print_help(const char *program)
         << "\n"
         << "Examples:\n"
         << "  " << program << " 0x02820008\n"
-        << "  " << program << " StreamExposureTime\n"
-        << "  " << program << " DepthCategory_RegAddr+StreamExposureTime\n";
+        << "  " << program
+        << " DepthCategory_RegAddr+StreamExposureTime_RegAddr\n";
 }
 
 const RegisterDatabase &lookup_database()
@@ -584,26 +536,41 @@ const RegisterDatabase &lookup_database()
 
 } // namespace
 
+std::uint32_t gm86x::parse_regaddr(const std::string &text)
+{
+    const bool prefixed = text.starts_with("0x") || text.starts_with("0X");
+    if (text.empty() || prefixed || text.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos) {
+        const std::string_view digits = std::string_view(text).substr(prefixed ? 2 : 0);
+        std::uint32_t value = 0;
+        const auto [end, error] = std::from_chars(digits.data(), digits.data() + digits.size(), value, 16);
+        if (digits.empty() || error != std::errc{} || end != digits.data() + digits.size()) {
+            throw std::invalid_argument("invalid register address: " + text);
+        }
+        return value;
+    }
+    return lookup_database().resolve_name(text);
+}
+
 std::string gm86x::regaddr_name(std::uint32_t address)
 {
     const auto names = lookup_database().exact_names(address);
 
     if (names.size() > 1) {
-        const auto separator = names.front().find(" + ");
+        const auto separator = names.front().find('+');
         if (separator != std::string::npos) {
             const auto category = names.front().substr(0, separator);
             const auto same_category = std::all_of(
                 names.begin(), names.end(), [&](const std::string &name) {
-                    return name.starts_with(category + " + ");
+                    return name.starts_with(category + '+');
                 });
             if (same_category) {
                 std::ostringstream output;
-                output << category << " + (";
+                output << category << "+(";
                 for (size_t index = 0; index < names.size(); ++index) {
                     if (index != 0) {
                         output << " / ";
                     }
-                    output << names[index].substr(separator + 3);
+                    output << names[index].substr(separator + 1);
                 }
                 output << ')';
                 return output.str();

@@ -366,23 +366,23 @@ Commands:
     isp-fw-update-submit-pending <addr32> <size> <byte...>
     isp-fw-update-submit-force-terminate
     isp-fw-update-file <bin_file>
-    gige-read <addr32> <size>
-    gige-write <addr32> <size> <byte...>
+    gige-read <addr32|name> <size>
+    gige-write <addr32|name> <size> <byte...>
     gige-get-access-map [start_index count]
     gige-get-access-map-count
-    gige-read-u32 <addr32>
-    gige-read-i32 <addr32>
-    gige-read-float <addr32>
-    gige-write-u32 <addr32> <value>
-    gige-write-i32 <addr32> <value>
-    gige-write-float <addr32> <value>
+    gige-read-u32 <addr32|name>
+    gige-read-i32 <addr32|name>
+    gige-read-float <addr32|name>
+    gige-write-u32 <addr32|name> <value>
+    gige-write-i32 <addr32|name> <value>
+    gige-write-float <addr32|name> <value>
     read-userset <slot> <offset32> <size>
     read-userset-slot <slot> <out_file>
     list-userset-addr <slot>
-    read-userset-addr <slot> <addr32>
+    read-userset-addr <slot> [addr32|name]
     read-calib <out_file>
     list-calib-addr
-    read-calib-addr [addr32]
+    read-calib-addr [addr32|name]
     read-sn
     write-sn <sn>
     erase-userset <slot|all>
@@ -407,6 +407,11 @@ Commands:
 
 Notes:
     - Byte and register arguments use hexadecimal by default.
+    - GigE and read-*-addr addresses also accept regaddr_convert register names.
+      Use the full name printed by regaddr_convert, for example:
+      DepthCategory_RegAddr+StreamExposureTime_RegAddr.
+      Unknown or ambiguous names are rejected before sending a request.
+    - read-calib-addr and read-userset-addr without an address read all entries.
     - This tool uses the Linux I2C_RDWR backend instead of debugfs node.
     - Per-request timing logs are enabled by default.
     - Userset slots for write/update/erase commands are 0..128.
