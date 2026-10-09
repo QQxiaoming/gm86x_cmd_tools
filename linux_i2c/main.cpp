@@ -1,4 +1,5 @@
 #include "bytes.hpp"
+#include <gm86x/build_info.hpp>
 #include "commands.hpp"
 #include "media_discovery.hpp"
 #include "protocol.hpp"
@@ -8,14 +9,16 @@
 #include <stdexcept>
 
 static void print_help(const std::string &exe_name) {
+    const auto name = gm86x::executable_name(exe_name);
     std::cout << R"(Usage:
-    )" << exe_name << R"( [global options] <command> [args...]
+    )" << name << R"( [global options] <command> [args...]
 
 Global options:
+    -V, --version            print version and build information
     -b, --bus <index>        I2C bus index, default 9
     -a, --addr <7bit_hex>    I2C 7-bit address, default 0x1a
     -s, --scan <0|1>         resolve I2C bus/address from /dev/media*)";
-	gm86x::CommandDispatcher::print_help(exe_name);
+	gm86x::CommandDispatcher::print_help(name);
 }
 
 int main(int argc, char **argv) {
@@ -38,7 +41,11 @@ int main(int argc, char **argv) {
             if (option == "--")
                 break;
             if (option == "-h" || option == "--help") {
-                gm86x::CommandDispatcher::print_help(argv[0]);
+                gm86x::CommandDispatcher::print_help(gm86x::executable_name(argv[0]));
+                return 0;
+            }
+            if (option == "-V" || option == "--version") {
+                gm86x::print_build_info(argv[0]);
                 return 0;
             }
             if (option == "-s" || option == "--scan") {

@@ -1,6 +1,7 @@
 
 #include "bytes.hpp"
 #include "commands.hpp"
+#include <gm86x/build_info.hpp>
 #include "linux_usb_xu.hpp"
 #include "protocol.hpp"
 #include "usb_discovery.hpp"
@@ -16,17 +17,19 @@ const static std::uint8_t i2c_forward_selector = 0x05;
 const static std::size_t max_chunk_size = 250;
 
 static void print_help(const std::string &exe_name) {
+    const auto name = gm86x::executable_name(exe_name);
     std::cout << R"(Usage:
-    )" << exe_name << R"( [global options] <command> [args...]
+    )" << name << R"( [global options] <command> [args...]
 
 Global options:
+    -V, --version            print version and build information
     -d, --device <path>      UVC video node, default /dev/video6
 
 Talks to the UVC extension unit directly via libusb control transfers
 (bypassing the uvcvideo driver's XU control size limit). UVC I2C_FORWARD
 uses fixed XU Control Selector 0x05.
 )";
-	gm86x::CommandDispatcher::print_help(exe_name);
+	gm86x::CommandDispatcher::print_help(name);
 }
 
 int main(int argc, char **argv) {
@@ -48,6 +51,10 @@ int main(int argc, char **argv) {
 				break;
 			if (option == "-h" || option == "--help") {
 				print_help(argv[0]);
+				return 0;
+			}
+			if (option == "-V" || option == "--version") {
+				gm86x::print_build_info(argv[0]);
 				return 0;
 			}
 			if ((option == "-d" || option == "--device") && index < argc)

@@ -1,9 +1,39 @@
 cmake_minimum_required(VERSION 3.16)
-project(gm86x_cmd_i2c_tools_cpp VERSION 0.1.0 LANGUAGES CXX)
+project(gm86x_cmd_i2c_tools_cpp LANGUAGES CXX)
+
+execute_process(
+    COMMAND git -C "${CMAKE_CURRENT_SOURCE_DIR}" describe --always --long --dirty --abbrev=8 --tags
+    OUTPUT_VARIABLE GM86X_GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT GM86X_GIT_COMMIT)
+    set(GM86X_GIT_COMMIT "unknown")
+endif()
+execute_process(
+    COMMAND git -C "${CMAKE_CURRENT_SOURCE_DIR}" describe --tags --abbrev=0
+    OUTPUT_VARIABLE PROJECT_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT PROJECT_VERSION)
+    set(PROJECT_VERSION "unknown")
+endif()
+string(TIMESTAMP GM86X_BUILD_TIME "%Y-%m-%d %H:%M:%S UTC" UTC)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/build_info.hpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/gm86x/build_info.hpp"
+    @ONLY
+)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+function(gm86x_configure_build_info target)
+    target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+    target_compile_definitions(${target} PRIVATE "GM86X_BUILD_TYPE=\"$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Unspecified>\"")
+endfunction()
 
 add_library(gm86x_core
     core/src/commands/basic_commands.cpp
@@ -26,6 +56,7 @@ if(WIN32)
 	add_executable(gm86x_cmd_uvc_tools
     windows_uvc/windows_usb_xu.cpp
         windows_uvc/main.cpp)
+    gm86x_configure_build_info(gm86x_cmd_uvc_tools)
 	target_include_directories(gm86x_cmd_uvc_tools PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/windows_uvc/libusb_win)
 	target_link_libraries(gm86x_cmd_uvc_tools PRIVATE
@@ -39,6 +70,7 @@ else()
         linux_i2c/linux_i2c.cpp
         linux_i2c/media_discovery.cpp
         linux_i2c/main.cpp)
+    gm86x_configure_build_info(gm86x_cmd_i2c_tools)
     target_link_libraries(gm86x_cmd_i2c_tools PRIVATE gm86x_core)
     if(NOT MSVC)
         target_compile_options(gm86x_cmd_i2c_tools PRIVATE -Wall -Wextra -Wpedantic)
@@ -72,6 +104,7 @@ else()
                 linux_uvc/linux_usb_xu.cpp
                 linux_uvc/usb_discovery.cpp
                 linux_uvc/main.cpp)
+            gm86x_configure_build_info(gm86x_cmd_uvc_tools)
             target_link_libraries(gm86x_cmd_uvc_tools PRIVATE gm86x_core PkgConfig::LIBUSB)
             if(NOT MSVC)
                 target_compile_options(gm86x_cmd_uvc_tools PRIVATE -Wall -Wextra -Wpedantic)

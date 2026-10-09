@@ -1,0 +1,24 @@
+#pragma once
+
+#include <iostream>
+#include <string>
+#include <string_view>
+
+namespace gm86x {
+
+inline std::string executable_name(std::string_view executable_path) {
+    const auto name_start = executable_path.find_last_of("/\\");
+    if (name_start == std::string_view::npos)
+        return std::string(executable_path);
+    return std::string(executable_path.substr(name_start + 1));
+}
+
+inline void print_build_info(const char *tool_name) {
+    std::cout << executable_name(tool_name) << '\n'
+              << "  Version: " << "@PROJECT_VERSION@" << '\n'
+              << "  Commit:  " << "@GM86X_GIT_COMMIT@" << '\n'
+              << "  Built:   " << "@GM86X_BUILD_TIME@" << '\n'
+              << "  Type:    " << GM86X_BUILD_TYPE << '\n';
+}
+
+} // namespace gm86x
