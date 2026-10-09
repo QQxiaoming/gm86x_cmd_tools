@@ -20,7 +20,7 @@ private:
 	static std::vector<std::uint8_t> gige_header(const std::string &address, std::uint16_t size);
 	static std::uint16_t parse_gige_size(const std::string &value);
 	static void print_access_map_count(const Response &response);
-	static void print_access_map_page(std::size_t start_index, const Response &response);
+	static void print_access_map_page(std::size_t start_index, const Response &response, bool skipPrintHeader=false);
 };
 
 }

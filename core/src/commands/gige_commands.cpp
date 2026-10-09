@@ -42,15 +42,17 @@ void GigeCommandGroup::print_access_map_count(const Response &response) {
     }
 }
 
-void GigeCommandGroup::print_access_map_page(std::size_t start_index, const Response &response) {
+void GigeCommandGroup::print_access_map_page(std::size_t start_index, const Response &response, bool skipPrintHeader) {
     if (response.status != 0)
         return;
     if (response.payload.size() % 5 != 0)
         throw std::runtime_error("access-map payload length is not a multiple of 5");
     const auto entries = response.payload.size() / 5;
-    print_section("access-map-page");
-    print_field("start_index") << start_index << '\n';
-    print_field("entry_count") << entries << '\n';
+    if (!skipPrintHeader) {
+        print_section("access-map-page");
+        print_field("start_index") << start_index << '\n';
+        print_field("entry_count") << entries << '\n';
+    }
     for (std::size_t index = 0; index < entries; ++index) {
         const auto offset = index * 5;
         const auto address = read_le32(std::span<const std::uint8_t>(response.payload).subspan(offset));
@@ -126,7 +128,28 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
     }
     if (name == "gige-get-access-map") {
         if (args.empty()) {
-            print_access_map_page(0, execute(GMSL_COMMAND_GIGE_CAM_GET_ACCESS_MAP));
+            auto response = execute(GMSL_COMMAND_GIGE_CAM_GET_ACCESS_MAP, {0}, false, false);
+            if (response.status == 0 && response.payload.size() == 2) {
+                const auto count = static_cast<unsigned>(response.payload[0] | response.payload[1] << 8);
+                if(context_.max_response_payload_size <= (count*5+50)) {
+                    // 分页获取整个访问映射表
+                    std::uint16_t start_index = 0;
+                    print_section("access-map-page");
+                    print_field("start_index") << start_index << '\n';
+                    print_field("entry_count") << count << '\n';
+                    for (std::uint16_t i = 0; i < count; i += 45) {
+                        const auto page_count = std::min(static_cast<unsigned>(count - i), 45u);
+                        auto page_payload = std::vector<std::uint8_t>{1};
+                        append_to(page_payload, le16(start_index + i));
+                        page_payload.push_back(static_cast<std::uint8_t>(page_count));
+                        print_access_map_page(start_index + i, execute(GMSL_COMMAND_GIGE_CAM_GET_ACCESS_MAP, page_payload, false, false), true);
+                    }
+                } else {
+                    print_access_map_page(0, execute(GMSL_COMMAND_GIGE_CAM_GET_ACCESS_MAP));
+                }
+            } else {
+                throw std::runtime_error("Failed to get access map count");
+            }
             return true;
         }
         require_args(args, 2, "gige-get-access-map requires <start> <count>");
