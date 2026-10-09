@@ -267,17 +267,23 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
     }
     if (name == "read-calib-addr" || name == "list-calib-addr" || name == "read-userset-addr" ||
         name == "list-userset-addr") {
+        bool readAll = false;
         const bool userset = name.find("userset") != std::string::npos;
         const bool list = name.find("list") != std::string::npos;
         const auto path =
             (std::filesystem::temp_directory_path() / (userset ? "gm86x-userset.bin" : "gm86x-calib.bin")).string();
         if (userset) {
-            require_args(args, list ? 1 : 2, name + " arguments invalid");
+            if (list ? args.size() > 1 : args.size() > 2)
+                throw std::invalid_argument(name + " arguments invalid");
             read_partition(GMSL_COMMAND_READ_USERSET_PARTITION, path, 2048, 1024, userset_read_slot(args[0]));
+            if(args.size() == 1)
+                readAll = true;
         } else {
             if (list ? !args.empty() : args.size() > 1)
                 throw std::invalid_argument(name + " arguments invalid");
             read_partition(GMSL_COMMAND_READ_CALIB_PARTITION, path, 8192, 2048);
+            if(!args.empty())
+                readAll = true;
         }
         const auto entries = parse_entries(read_file(path));
         std::filesystem::remove(path);
@@ -299,7 +305,7 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
                        << "size="
                        << entries[index].data.size() << '\n';
             }
-        } else if (args.empty()) {
+        } else if (readAll) {
             print_section("metadata");
             print_field("entry_count") << entries.size() << '\n';
             for (std::size_t index = 0; index < entries.size(); ++index) {
