@@ -30,7 +30,7 @@ public:
     static constexpr int field_key_width = 11;
     static void print_section(std::string_view name, int indent = 0);
     static std::ostream &print_field(std::string_view key, int width = field_key_width, int indent = field_indent);
-    static void print_hex_dump(std::span<const std::uint8_t> data);
+    static void print_hex_dump(std::span<const std::uint8_t> data, size_t left_space = 0);
     enum {
         GMSL_COMMAND_PING = 0x01,
         GMSL_COMMAND_GET_STATUS = 0x02,

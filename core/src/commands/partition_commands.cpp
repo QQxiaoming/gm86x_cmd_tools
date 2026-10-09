@@ -252,7 +252,8 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
             require_args(args, list ? 1 : 2, name + " arguments invalid");
             read_partition(GMSL_COMMAND_READ_USERSET_PARTITION, path, 2048, 1024, userset_read_slot(args[0]));
         } else {
-            require_args(args, list ? 0 : 1, name + " arguments invalid");
+            if (list ? !args.empty() : args.size() > 1)
+                throw std::invalid_argument(name + " arguments invalid");
             read_partition(GMSL_COMMAND_READ_CALIB_PARTITION, path, 8192, 2048);
         }
         const auto entries = parse_entries(read_file(path));
@@ -274,6 +275,15 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
                        << address_labels[index]
                        << "size="
                        << entries[index].data.size() << '\n';
+            }
+        } else if (args.empty()) {
+            print_section("metadata");
+            print_field("entry_count") << entries.size() << '\n';
+            for (std::size_t index = 0; index < entries.size(); ++index) {
+                print_field("[" + std::to_string(index) + "]", 11, 4)
+                    << "address     : " << regaddr_label(entries[index].address)
+                    << "\n                  length      : " << entries[index].data.size() << " bytes\n";
+                print_hex_dump(entries[index].data, 16);
             }
         } else {
             const auto address = parse_u32(args.back());

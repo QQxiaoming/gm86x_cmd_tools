@@ -135,12 +135,14 @@ const char *CommandGroup::opcode_name(std::uint8_t opcode) {
     }
 }
 
-void CommandGroup::print_hex_dump(std::span<const std::uint8_t> data) {
-    constexpr std::size_t bytes_per_line = 16;
+void CommandGroup::print_hex_dump(std::span<const std::uint8_t> data, size_t left_space) {
     constexpr std::size_t group_size = 8;
+    constexpr std::size_t bytes_per_line = 16;
     const auto continuation = std::string(static_cast<std::size_t>(field_indent + field_key_width + 3), ' ');
     for (std::size_t offset = 0; offset < data.size(); offset += bytes_per_line) {
         const auto line = data.subspan(offset, std::min(bytes_per_line, data.size() - offset));
+        if (left_space > 0)
+            std::cout << std::string(left_space, ' ');
         if (offset == 0)
             print_field("data");
         else
@@ -380,7 +382,7 @@ Commands:
     read-userset-addr <slot> <addr32>
     read-calib <out_file>
     list-calib-addr
-    read-calib-addr <addr32>
+    read-calib-addr [addr32]
     read-sn
     write-sn <sn>
     erase-userset <slot|all>
