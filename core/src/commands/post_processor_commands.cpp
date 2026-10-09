@@ -248,7 +248,7 @@ void PostProcessorCommandGroup::print_get_status(std::span<const std::uint8_t> p
     print_field("stream_count", width) << static_cast<unsigned>(payload[14]) << '\n';
 
     constexpr std::size_t stream_struct_size = 24;
-    constexpr std::array<std::string_view, 2> stream_names{"rgb", "depth_ir"};
+    constexpr std::array<std::string_view, 4> stream_names{"rgb", "depth", "left_ir", "right_ir"};
     for (std::size_t index = 0; index < stream_names.size(); ++index) {
         const auto base = 15 + index * stream_struct_size;
         if (base + stream_struct_size > payload.size())
@@ -422,7 +422,7 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
             const auto response = execute_command(0x02, {});
             print_command_response("get-status", response);
             if (response.status == 0) {
-                require_payload_size(response.payload, 63, "get-status");
+                require_payload_size(response.payload, 111, "get-status");
                 print_get_status(response.payload);
             }
             return true;
