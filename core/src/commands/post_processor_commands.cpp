@@ -319,7 +319,7 @@ void PostProcessorCommandGroup::print_get_stream_caps(std::span<const std::uint8
     print_field("stream_count", width) << static_cast<unsigned>(payload[1]) << '\n';
     print_field("format_record_count", width) << static_cast<unsigned>(payload[2]) << '\n';
     print_field("frame_record_count", width) << static_cast<unsigned>(payload[3]) << '\n';
-    if (payload[0] != 1 || payload[1] != 2 || payload[2] != 4 || payload[3] != 4)
+    if (payload[0] != 2 || payload[1] != 4 || payload[2] != 4 || payload[3] != 4)
         throw std::runtime_error("get-stream-caps contains unsupported record counts");
 
     constexpr std::size_t stream_offset = 4;
@@ -494,7 +494,7 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
             const auto response = execute_command(0x16, {});
             print_command_response("get-stream-caps", response);
             if (response.status == 0) {
-                require_payload_size(response.payload, 152, "get-stream-caps");
+                require_payload_size(response.payload, 160, "get-stream-caps");
                 print_get_stream_caps(response.payload);
             }
             return true;
