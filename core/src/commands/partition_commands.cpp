@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -284,6 +285,15 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
                     << "address     : " << regaddr_label(entries[index].address)
                     << "\n                  length      : " << entries[index].data.size() << " bytes\n";
                 print_hex_dump(entries[index].data, 16);
+                if(entries[index].data.size() == 4) {
+                    int int32_value;
+                    for (std::size_t i = 0; i < sizeof(int32_value); ++i)
+                        reinterpret_cast<std::uint8_t *>(&int32_value)[i] = entries[index].data[i];
+                    float float_value;
+                    std::memcpy(&float_value, &int32_value, sizeof(float_value));
+                    print_field("as_int32",11,18) << int32_value << '\n';
+                    print_field("as_float",11,18) << float_value << '\n';
+                }
             }
         } else {
             const auto address = parse_u32(args.back());
@@ -295,6 +305,15 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
             print_field("address") << regaddr_label(address) << '\n';
             print_field("length") << found->data.size() << " bytes\n";
             print_hex_dump(found->data);
+            if(found->data.size() == 4) {
+                int int32_value;
+                for (std::size_t i = 0; i < sizeof(int32_value); ++i)
+                    reinterpret_cast<std::uint8_t *>(&int32_value)[i] = found->data[i];
+                float float_value;
+                std::memcpy(&float_value, &int32_value, sizeof(float_value));
+                print_field("as_int32") << int32_value << '\n';
+                print_field("as_float") << float_value << '\n';
+            }
         }
         return true;
     }
