@@ -382,6 +382,24 @@ public:
         return names;
     }
 
+    // Returns the CSV value type shared by every register at the address,
+    // or an empty string when the address is unknown or the types disagree.
+    std::string exact_kind(uint32_t address) const
+    {
+        std::string kind;
+        for (const auto &entry : entries_) {
+            if (entry.address() != address) {
+                continue;
+            }
+            if (kind.empty()) {
+                kind = entry.kind;
+            } else if (kind != entry.kind) {
+                return {};
+            }
+        }
+        return kind;
+    }
+
     std::string describe(const Entry &entry) const
     {
         std::ostringstream output;
@@ -558,12 +576,17 @@ void print_help(const char *program)
         << "  " << program << " DepthCategory_RegAddr+StreamExposureTime\n";
 }
 
+const RegisterDatabase &lookup_database()
+{
+    static const RegisterDatabase database({}, "gmsl");
+    return database;
+}
+
 } // namespace
 
 std::string gm86x::regaddr_name(std::uint32_t address)
 {
-    static const RegisterDatabase database({}, "gmsl");
-    const auto names = database.exact_names(address);
+    const auto names = lookup_database().exact_names(address);
 
     if (names.size() > 1) {
         const auto separator = names.front().find(" + ");
@@ -606,6 +629,27 @@ std::string gm86x::regaddr_label(std::uint32_t address)
         label += " [ " + name + " ]";
     }
     return label;
+}
+
+gm86x::RegaddrKind gm86x::regaddr_kind(std::uint32_t address)
+{
+    const auto kind = lookup_database().exact_kind(address);
+    if (kind == "integer") {
+        return RegaddrKind::Integer;
+    }
+    if (kind == "float") {
+        return RegaddrKind::Float;
+    }
+    if (kind == "string") {
+        return RegaddrKind::String;
+    }
+    if (kind == "byte array") {
+        return RegaddrKind::ByteArray;
+    }
+    if (kind == "struct") {
+        return RegaddrKind::Struct;
+    }
+    return RegaddrKind::Unknown;
 }
 
 int gm86x::run_regaddr_convert(int argc, char **argv)

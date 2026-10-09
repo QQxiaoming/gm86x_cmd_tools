@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,7 @@ private:
 	static void write_entries(const std::string &path, const std::vector<Entry> &entries);
 	static const char *isp_update_status_name(std::uint8_t status);
 	static std::size_t parse_chunk_size(const std::string &value);
+	static void print_register_value(std::uint32_t address, std::span<const std::uint8_t> data, int indent);
 	void read_partition(std::uint8_t opcode, const std::string &path, std::size_t partition_size,
 	                    std::size_t chunk_size, std::optional<std::uint8_t> slot = std::nullopt);
 	void print_isp_pending(const Response &response) const;

@@ -48,4 +48,5 @@ add_executable(regaddr_convert
 )
 target_include_directories(regaddr_convert PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(regaddr_convert PRIVATE percipio_regaddr)
+set_target_properties(regaddr_convert PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 gm86x_enable_warnings(regaddr_convert)

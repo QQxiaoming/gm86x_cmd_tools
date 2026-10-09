@@ -13,4 +13,17 @@ std::string regaddr_name(std::uint32_t address);
 // The name suffix is omitted when the address is unknown.
 std::string regaddr_label(std::uint32_t address);
 
+// Value type declared for a register in the TYGenICamReg CSV files.
+enum class RegaddrKind {
+    Unknown, // address is unknown, non-scalar, or matched by disagreeing registers
+    Integer,
+    Float,
+    String,
+    ByteArray,
+    Struct,
+};
+
+// Returns the declared value type of a full GigE register address.
+RegaddrKind regaddr_kind(std::uint32_t address);
+
 } // namespace gm86x

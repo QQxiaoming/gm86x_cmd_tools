@@ -51,6 +51,28 @@ std::uint32_t PartitionCommandGroup::encode_update_offset(std::uint32_t offset) 
             (context_.end_update ? 0x40000000U : 0U);
 }
 
+void PartitionCommandGroup::print_register_value(std::uint32_t address, std::span<const std::uint8_t> data,
+                                                 int indent) {
+    const auto kind = regaddr_kind(address);
+    if (kind == RegaddrKind::String) {
+        print_field("as_string", field_key_width, indent) << ascii(data) << '\n';
+        return;
+    }
+    if (data.size() != 4)
+        return;
+    const auto raw = read_le32(data);
+    if (kind == RegaddrKind::Integer) {
+        std::int32_t int32_value;
+        std::memcpy(&int32_value, &raw, sizeof(int32_value));
+        print_field("as_int32", field_key_width, indent) << int32_value << '\n';
+    }
+    if (kind == RegaddrKind::Float) {
+        float float_value;
+        std::memcpy(&float_value, &raw, sizeof(float_value));
+        print_field("as_float", field_key_width, indent) << float_value << '\n';
+    }
+}
+
 std::size_t PartitionCommandGroup::parse_chunk_size(const std::string &value) {
     const auto parsed =
         value.find_first_not_of("0123456789") == std::string::npos ? std::stoull(value, nullptr, 10) : parse_u16(value);
@@ -285,15 +307,7 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
                     << "address     : " << regaddr_label(entries[index].address)
                     << "\n                  length      : " << entries[index].data.size() << " bytes\n";
                 print_hex_dump(entries[index].data, 16);
-                if(entries[index].data.size() == 4) {
-                    int int32_value;
-                    for (std::size_t i = 0; i < sizeof(int32_value); ++i)
-                        reinterpret_cast<std::uint8_t *>(&int32_value)[i] = entries[index].data[i];
-                    float float_value;
-                    std::memcpy(&float_value, &int32_value, sizeof(float_value));
-                    print_field("as_int32",11,18) << int32_value << '\n';
-                    print_field("as_float",11,18) << float_value << '\n';
-                }
+                print_register_value(entries[index].address, entries[index].data, 18);
             }
         } else {
             const auto address = parse_u32(args.back());
@@ -305,15 +319,7 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
             print_field("address") << regaddr_label(address) << '\n';
             print_field("length") << found->data.size() << " bytes\n";
             print_hex_dump(found->data);
-            if(found->data.size() == 4) {
-                int int32_value;
-                for (std::size_t i = 0; i < sizeof(int32_value); ++i)
-                    reinterpret_cast<std::uint8_t *>(&int32_value)[i] = found->data[i];
-                float float_value;
-                std::memcpy(&float_value, &int32_value, sizeof(float_value));
-                print_field("as_int32") << int32_value << '\n';
-                print_field("as_float") << float_value << '\n';
-            }
+            print_register_value(address, found->data, field_indent);
         }
         return true;
     }
