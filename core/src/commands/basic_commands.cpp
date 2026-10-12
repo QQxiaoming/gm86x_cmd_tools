@@ -415,6 +415,44 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
         }
         return true;
     }
+    if (name == "get-hw-info") {
+        require_args(args, 0, "get-hw-info takes no arguments");
+        auto payload = le32(0xd8);
+        append_to(payload, le16(128));
+        auto response = execute(GMSL_COMMAND_GIGE_CAM_READ_REGISTER, payload,false,false);
+        if (response.status != 0)
+            throw std::runtime_error("SN read failed");
+        std::string sn = ascii(response.payload);
+        payload.clear();
+        append_to(payload, le32(0x68));
+        append_to(payload, le16(128));
+        response = execute(GMSL_COMMAND_GIGE_CAM_READ_REGISTER, payload,false,false);
+        if (response.status != 0)
+            throw std::runtime_error("ModelName read failed");
+        std::string modelName = ascii(response.payload);
+        payload.clear();
+        append_to(payload, le32(0x1100108));
+        append_to(payload, le16(128));
+        response = execute(GMSL_COMMAND_GIGE_CAM_READ_REGISTER, payload,false,false);
+        std::string hardWareModel = ascii(response.payload);
+        payload.clear();
+        append_to(payload, le32(0x1100008));
+        append_to(payload, le16(128));
+        response = execute(GMSL_COMMAND_GIGE_CAM_READ_REGISTER, payload,false,false);
+        std::string hardwareVersion = ascii(response.payload);
+        payload.clear();
+        append_to(payload, le32(0x1101130));
+        append_to(payload, le16(4));
+        response = execute(GMSL_COMMAND_GIGE_CAM_READ_REGISTER, payload,false,false);
+        uint32_t errcode = read_le32(response.payload, 0);
+        print_section("get-hw-info");
+        print_field("SN", 15) << sn << '\n';
+        print_field("ModelName", 15) << modelName << '\n';
+        print_field("HardWareModel", 15) << hardWareModel << '\n';
+        print_field("HardWareVersion", 15) << hardwareVersion << '\n';
+        print_field("ErrCode", 15) << "0x" << std::hex << errcode << std::dec << '\n';
+        return true;
+    }
     if (name == "percipio-debug") {
         if (args.empty())
             throw std::invalid_argument("percipio-debug requires <op>");

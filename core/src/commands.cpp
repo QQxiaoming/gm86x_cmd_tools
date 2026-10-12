@@ -318,6 +318,7 @@ Commands:
     get-status
     mcu-reset
     set-reset <0|1>
+    get-hw-info
     get-fw-version
     get-timestamp
     set-timestamp <timestamp_u64>
