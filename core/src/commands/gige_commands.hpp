@@ -24,6 +24,11 @@ private:
 	static void print_access_map_page(std::size_t start_index, const Response &response,
 	                                  bool skipPrintHeader = false,
 	                                  std::size_t addressColumnWidth = 0);
+	static void print_long_ack_time_map_count(const Response &response);
+	static std::size_t long_ack_time_map_address_column_width(const Response &response);
+	static void print_long_ack_time_map_page(std::size_t start_index, const Response &response,
+	                                         bool skipPrintHeader = false,
+	                                         std::size_t addressColumnWidth = 0);
 };
 
 }

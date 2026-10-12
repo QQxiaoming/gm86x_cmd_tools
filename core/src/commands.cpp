@@ -108,6 +108,8 @@ const char *CommandGroup::opcode_name(std::uint8_t opcode) {
         return "GET_AUTO_USERSET_SLOT";
     case GMSL_COMMAND_GIGE_CAM_GET_ACCESS_MAP:
         return "GIGE_CAM_GET_ACCESS_MAP";
+    case GMSL_COMMAND_GIGE_CAM_GET_LONG_ACK_TIME_MAP:
+        return "GIGE_CAM_GET_LONG_ACK_TIME_MAP";
     case GMSL_COMMAND_APPLY_USERSET:
         return "APPLY_USERSET";
     case GMSL_COMMAND_LOW_POWER_MODE:
@@ -372,6 +374,8 @@ Commands:
     gige-write <addr32|name> <size> <byte...>
     gige-get-access-map [start_index count]
     gige-get-access-map-count
+    gige-get-long-ack-time-map [start_index count]
+    gige-get-long-ack-time-map-count
     gige-read-u32 <addr32|name>
     gige-read-i32 <addr32|name>
     gige-read-float <addr32|name>
