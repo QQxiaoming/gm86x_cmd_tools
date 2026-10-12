@@ -334,6 +334,7 @@ Commands:
     de100-dump-reg32 <addr32> <count>
     de100-subsnr-read <1|2|left|right> <reg16>
     de100-subsnr-write <1|2|3|left|right|all> <reg16> <value16>
+    de100-get-statistics <sof_eof_num_base_addr> <err_num_base_addr>
     isp-read <reg16>
     isp-write <reg16> <value8>
     isp-subsnr-read <reg16>
