@@ -7,6 +7,18 @@
 #include <optional>
 #include <sstream>
 
+#if defined(__linux__)
+#  include <byteswap.h>
+#elif defined(__APPLE__)
+#  include <libkern/OSByteOrder.h>
+#  define bswap_32(x) OSSwapInt32(x)
+#elif defined(_MSC_VER)
+#  include <stdlib.h>
+#  define bswap_32(x) _byteswap_ulong(x)
+#else
+#  define bswap_32(x) __builtin_bswap32(x)
+#endif
+
 namespace gm86x::detail {
 std::uint8_t RegisterCommandGroup::binary_value(const std::string &value, const std::string &command) {
     if (value == "0")
@@ -191,113 +203,113 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
         print_field("rx1_sof") << static_cast<unsigned>(value) << '\n';
 
         uint32_t value32 = read_de100_reg32((err_num_base_addr+0));
-        print_field("rx1_ecc_sig_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_ecc_sig_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+4));
-        print_field("rx1_ecc_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_ecc_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+8));
-        print_field("rx1_crc_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_crc_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+12));
-        print_field("rx1_byte_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_byte_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+16));
-        print_field("rx1_sot_err_lane0") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_sot_err_lane0") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+20));
-        print_field("rx1_sot_err_lane1") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_sot_err_lane1") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+24));
-        print_field("rx1_sot_err_lane2") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_sot_err_lane2") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+28));
-        print_field("rx1_sot_err_lane3") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_sot_err_lane3") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+32));
-        print_field("rx1_sof_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_sof_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+36));
-        print_field("rx1_eof_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_eof_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+40));
-        print_field("rx1_line_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx1_line_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+44));
-        print_field("rx2_ecc_sig_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_ecc_sig_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+48));
-        print_field("rx2_ecc_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_ecc_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+52));
-        print_field("rx2_crc_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_crc_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+56));
-        print_field("rx2_byte_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_byte_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+60));
-        print_field("rx2_sot_err_lane0") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_sot_err_lane0") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+64));
-        print_field("rx2_sot_err_lane1") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_sot_err_lane1") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+68));
-        print_field("rx2_sot_err_lane2") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_sot_err_lane2") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+72));
-        print_field("rx2_sot_err_lane3") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_sot_err_lane3") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+76));
-        print_field("rx2_sof_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_sof_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+80));
-        print_field("rx2_eof_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_eof_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+84));
-        print_field("rx2_line_err") << static_cast<unsigned>(value32) << '\n';
+        print_field("rx2_line_err") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+88));
-        print_field("pre_fifo_overflow1") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre_fifo_overflow1") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+92));
-        print_field("pre_fifo_overflow2") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre_fifo_overflow2") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+96));
-        print_field("pre1_loss_data[0]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre1_loss_data[0]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+100));
-        print_field("pre1_loss_data[1]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre1_loss_data[1]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+104));
-        print_field("pre1_loss_data[2]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre1_loss_data[2]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+108));
-        print_field("pre2_loss_data[0]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre2_loss_data[0]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+112));
-        print_field("pre2_loss_data[1]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre2_loss_data[1]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+116));
-        print_field("pre2_loss_data[2]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre2_loss_data[2]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+120));
-        print_field("pre1_frame_err[0]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre1_frame_err[0]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+124));
-        print_field("pre1_frame_err[1]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre1_frame_err[1]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+128));
-        print_field("pre1_frame_err[2]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre1_frame_err[2]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+132));
-        print_field("pre2_frame_err[0]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre2_frame_err[0]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+136));
-        print_field("pre2_frame_err[1]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre2_frame_err[1]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+140));
-        print_field("pre2_frame_err[2]") << static_cast<unsigned>(value32) << '\n';
+        print_field("pre2_frame_err[2]") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+144));
-        print_field("rectify1_err_eol_irq") << static_cast<unsigned>(value32) << '\n';
+        print_field("rectify1_err_eol_irq") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+148));
-        print_field("rectify1_err_eof_irq") << static_cast<unsigned>(value32) << '\n';
+        print_field("rectify1_err_eof_irq") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+152));
-        print_field("rectify1_buf_err_irq") << static_cast<unsigned>(value32) << '\n';
+        print_field("rectify1_buf_err_irq") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+156));
-        print_field("rectify2_err_eol_irq") << static_cast<unsigned>(value32) << '\n';
+        print_field("rectify2_err_eol_irq") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+160));
-        print_field("rectify2_err_eof_irq") << static_cast<unsigned>(value32) << '\n';
+        print_field("rectify2_err_eof_irq") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+164));
-        print_field("rectify2_buf_err_irq") << static_cast<unsigned>(value32) << '\n';
+        print_field("rectify2_buf_err_irq") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+168));
-        print_field("async_fifo_full_left_int") << static_cast<unsigned>(value32) << '\n';
+        print_field("async_fifo_full_left_int") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+172));
-        print_field("async_fifo_full_right_int") << static_cast<unsigned>(value32) << '\n';
+        print_field("async_fifo_full_right_int") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+176));
-        print_field("frame_buf_ctrl1_conflict") << static_cast<unsigned>(value32) << '\n';
+        print_field("frame_buf_ctrl1_conflict") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+180));
-        print_field("frame_buf_ctrl2_conflict") << static_cast<unsigned>(value32) << '\n';
+        print_field("frame_buf_ctrl2_conflict") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+184));
-        print_field("image_stitch_u_fifo1_overflow_int") << static_cast<unsigned>(value32) << '\n';
+        print_field("image_stitch_u_fifo1_overflow_int") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+188));
-        print_field("image_stitch_u_fifo2_overflow_int") << static_cast<unsigned>(value32) << '\n';
+        print_field("image_stitch_u_fifo2_overflow_int") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+192));
-        print_field("image_stitch_u_fifo3_overflow_int") << static_cast<unsigned>(value32) << '\n';
+        print_field("image_stitch_u_fifo3_overflow_int") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+196));
-        print_field("image_stitch_u_fifo4_overflow_int") << static_cast<unsigned>(value32) << '\n';
+        print_field("image_stitch_u_fifo4_overflow_int") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+200));
-        print_field("image_stitch_u_fifo1_underflow") << static_cast<unsigned>(value32) << '\n';
+        print_field("image_stitch_u_fifo1_underflow") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+204));
-        print_field("image_stitch_u_fifo2_underflow") << static_cast<unsigned>(value32) << '\n';
+        print_field("image_stitch_u_fifo2_underflow") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+208));
-        print_field("image_stitch_u_fifo3_underflow") << static_cast<unsigned>(value32) << '\n';
+        print_field("image_stitch_u_fifo3_underflow") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+212));
-        print_field("image_stitch_u_fifo4_underflow") << static_cast<unsigned>(value32) << '\n';
+        print_field("image_stitch_u_fifo4_underflow") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         return true;
     }
     return false;
