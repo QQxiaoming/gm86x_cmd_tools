@@ -332,8 +332,8 @@ Commands:
     de100-read-reg32-val32 <reg32>
     de100-write-reg32-val32 <reg32> <value32>
     de100-dump-reg32 <addr32> <count>
-    subsnr-read <1|2|left|right> <reg16>
-    subsnr-write <1|2|3|left|right|all> <reg16> <value16>
+    de100-subsnr-read <1|2|left|right> <reg16>
+    de100-subsnr-write <1|2|3|left|right|all> <reg16> <value16>
     isp-read <reg16>
     isp-write <reg16> <value8>
     isp-subsnr-read <reg16>

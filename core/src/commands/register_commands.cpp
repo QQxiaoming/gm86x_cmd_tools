@@ -79,20 +79,20 @@ void RegisterCommandGroup::dump_de100_reg32(std::uint32_t address, std::uint32_t
 
 bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector<std::string> &args) {
     const std::string name(name_view);
-    if (name == "de100-read" || name == "isp-read") {
-        require_args(args, 1, name + " requires <reg16>");
-        const auto response = execute(name == "de100-read" ? GMSL_COMMAND_DE100_READ_REGISTER : GMSL_COMMAND_ISP_READ_REGISTER, le16(parse_u16(args[0])));
+    if (name == "de100-read") {
+        require_args(args, 1, "de100-read requires <reg16>");
+        const auto response = execute(GMSL_COMMAND_DE100_READ_REGISTER, le16(parse_u16(args[0])));
         if (response.status == 0 && (response.payload.size() == 1)) {
-            print_section(name);
+            print_section("de100-read");
             print_field("value") << "0x" << hex(response.payload[0], 2) << '\n';
         }
         return true;
     }
-    if (name == "de100-write" || name == "isp-write") {
-        require_args(args, 2, name + " requires <reg16> <value8>");
+    if (name == "de100-write") {
+        require_args(args, 2, "de100-write requires <reg16> <value8>");
         auto payload = le16(parse_u16(args[0]));
         payload.push_back(parse_byte(args[1]));
-        execute(name == "de100-write" ? GMSL_COMMAND_DE100_WRITE_REGISTER : GMSL_COMMAND_ISP_WRITE_REGISTER, payload);
+        execute(GMSL_COMMAND_DE100_WRITE_REGISTER, payload);
         return true;
     }
     if (name == "de100-read-reg32-val8" || 
@@ -146,40 +146,23 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
         dump_de100_reg32(address, count);
         return true;
     }
-    if (name == "subsnr-read") {
-        require_args(args, 2, "subsnr-read requires <channel> <reg16>");
+    if (name == "de100-subsnr-read") {
+        require_args(args, 2, "de100-subsnr-read requires <channel> <reg16>");
         auto payload = std::vector<std::uint8_t>{subsnr_channel(args[0], false)};
         append_to(payload, le16(parse_u16(args[1])));
         const auto response = execute(GMSL_COMMAND_DE100_SUBSNR_READ_REGISTER, payload);
         if (response.status == 0 && response.payload.size() == 2) {
-            print_section("subsnr-read");
+            print_section("de100-subsnr-read");
             print_field("value") << "0x" << hex(response.payload[1], 2) << hex(response.payload[0], 2) << '\n';
         }
         return true;
     }
-    if (name == "subsnr-write") {
-        require_args(args, 3, name + " arguments invalid");
+    if (name == "de100-subsnr-write") {
+        require_args(args, 3, "de100-subsnr-write arguments invalid");
         auto payload = std::vector<std::uint8_t>{subsnr_channel(args[0], true)};
         append_to(payload, le16(parse_u16(args[1])));
         append_to(payload, le16(parse_u16(args[2])));
         execute(GMSL_COMMAND_DE100_SUBSNR_WRITE_REGISTER, payload);
-        return true;
-    }
-    if (name == "isp-subsnr-read") {
-        require_args(args, 1, name + " requires <reg16>");
-        const auto response = execute(GMSL_COMMAND_ISP_READ_SUBSENSOR_REGISTER, le16(parse_u16(args[0])));
-        if (response.status == 0 && (response.payload.size() == 2)) {
-            print_section(name);
-            print_field("value") << "0x" << hex(response.payload[1], 2) << hex(response.payload[0], 2) << '\n';
-        }
-        return true;
-    }
-    if (name == "isp-subsnr-write") {
-        require_args(args, 2, name + " arguments invalid");
-        auto payload = std::vector<std::uint8_t>{};
-        append_to(payload, le16(parse_u16(args[0])));
-        append_to(payload, le16(parse_u16(args[1])));
-        execute(GMSL_COMMAND_ISP_WRITE_SUBSENSOR_REGISTER, payload);
         return true;
     }
     if (name == "de100-get-statistics") {
@@ -310,6 +293,39 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
         print_field("image_stitch_u_fifo3_underflow") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+212));
         print_field("image_stitch_u_fifo4_underflow") << static_cast<unsigned>(bswap_32(value32)) << '\n';
+        return true;
+    }
+    if (name == "isp-read") {
+        require_args(args, 1, "isp-read requires <reg16>");
+        const auto response = execute(GMSL_COMMAND_ISP_READ_REGISTER, le16(parse_u16(args[0])));
+        if (response.status == 0 && (response.payload.size() == 1)) {
+            print_section("isp-read");
+            print_field("value") << "0x" << hex(response.payload[0], 2) << '\n';
+        }
+        return true;
+    }
+    if (name == "isp-write") {
+        require_args(args, 2, "isp-write requires <reg16> <value8>");
+        auto payload = le16(parse_u16(args[0]));
+        payload.push_back(parse_byte(args[1]));
+        execute(GMSL_COMMAND_ISP_WRITE_REGISTER, payload);
+        return true;
+    }
+    if (name == "isp-subsnr-read") {
+        require_args(args, 1, name + " requires <reg16>");
+        const auto response = execute(GMSL_COMMAND_ISP_READ_SUBSENSOR_REGISTER, le16(parse_u16(args[0])));
+        if (response.status == 0 && (response.payload.size() == 2)) {
+            print_section(name);
+            print_field("value") << "0x" << hex(response.payload[1], 2) << hex(response.payload[0], 2) << '\n';
+        }
+        return true;
+    }
+    if (name == "isp-subsnr-write") {
+        require_args(args, 2, name + " arguments invalid");
+        auto payload = std::vector<std::uint8_t>{};
+        append_to(payload, le16(parse_u16(args[0])));
+        append_to(payload, le16(parse_u16(args[1])));
+        execute(GMSL_COMMAND_ISP_WRITE_SUBSENSOR_REGISTER, payload);
         return true;
     }
     return false;
