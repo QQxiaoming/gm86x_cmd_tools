@@ -48,8 +48,8 @@ void RegisterCommandGroup::set_de100_page(std::uint32_t address, bool verbose) {
 }
 
 std::uint8_t RegisterCommandGroup::read_de100_byte(std::uint16_t address) {
-    const auto response = context_.client.command(context_.sequence, GMSL_COMMAND_DE100_READ_REGISTER, le16(address));
-    if (response.status != 0 || response.payload.empty())
+    const auto response = execute(GMSL_COMMAND_DE100_READ_REGISTER, le16(address), false, false);
+    if (response.payload.empty())
         throw std::runtime_error("DE100 register read failed");
     return response.payload.back();
 }

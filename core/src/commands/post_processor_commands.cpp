@@ -90,7 +90,10 @@ void PostProcessorCommandGroup::print_command_response(std::string_view command,
         print_field("payload") << response.payload.size() << " bytes\n";
         print_hex_dump(response.payload);
     }
-
+    if (response.status != 0) {
+        throw std::runtime_error("post-processor command " + std::string(command) + " failed: status 0x" +
+                                 hex(response.status, 2) + " (" + post_processor_status_name(response.status) + ")");
+    }
 }
 
 const char *PostProcessorCommandGroup::usb_speed_name(std::uint8_t speed) {

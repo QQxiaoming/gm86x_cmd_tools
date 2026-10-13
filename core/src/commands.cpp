@@ -263,6 +263,10 @@ Response CommandGroup::execute(std::uint8_t opcode, const std::vector<std::uint8
         print_response(response);
     if (print_timing_enabled)
         print_timing(response.timing);
+    if (response.status != 0) {
+        throw std::runtime_error(std::string("command ") + opcode_name(opcode) + " failed: status 0x" +
+                                 hex(response.status, 2) + " (" + status_name(response.status) + ")");
+    }
     return response;
 }
 
@@ -420,6 +424,7 @@ Notes:
     - read-calib-addr and read-userset-addr without an address read all entries.
     - This tool uses the Linux I2C_RDWR backend instead of debugfs node.
     - Per-request timing logs are enabled by default.
+    - Non-zero device or post-processor command status is reported as an error and exits non-zero.
     - Userset slots for write/update/erase commands are 0..128.
     - update-*-chunk offset32 is hexadecimal by default.
     - --buffer-updates 1 sets offset bit31; --buffer-updates 0 clears it.
