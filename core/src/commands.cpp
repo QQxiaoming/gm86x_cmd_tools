@@ -414,6 +414,7 @@ Commands:
     percipio-debug-read32 <addr32>
     percipio-debug-write32 <addr32> <value32>
     percipio-debug-status-log <0|1>
+    percipio-debug-sleep-ms <ms>
 
 Notes:
     - Byte and register arguments use hexadecimal by default.

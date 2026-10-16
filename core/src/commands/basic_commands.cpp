@@ -487,6 +487,14 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
         }
         return true;
     }
+    if (name == "percipio-debug-sleep-ms") {
+        require_args(args, 1, "percipio-debug-sleep-ms requires <ms>");
+        const auto ms = parse_decimal_or_hex_u32(args[0]);
+        auto payload = std::vector<std::uint8_t>{0x03};
+        append_to(payload, le32(ms));
+        execute(GMSL_COMMAND_PERCIPIO_DEBUG, payload);
+        return true;
+    }
     if (name == "percipio-debug-status-log") {
         require_args(args, 1, "percipio-debug-status-log requires <0|1>");
         execute(GMSL_COMMAND_PERCIPIO_DEBUG, {0xc0, binary_value(args[0], name)});
