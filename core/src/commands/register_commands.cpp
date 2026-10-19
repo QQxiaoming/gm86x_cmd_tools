@@ -30,9 +30,9 @@ std::uint8_t RegisterCommandGroup::binary_value(const std::string &value, const 
 
 std::uint8_t RegisterCommandGroup::subsnr_channel(const std::string &value, bool allow_all) {
     if (value == "1" || value == "left")
-        return 0;
-    if (value == "2" || value == "right")
         return 1;
+    if (value == "2" || value == "right")
+        return 2;
     if (allow_all && (value == "3" || value == "all"))
         return 3;
     throw std::invalid_argument("invalid subsnr channel: " + value);
