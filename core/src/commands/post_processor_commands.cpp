@@ -47,6 +47,8 @@ std::vector<std::uint8_t> PostProcessorCommandGroup::read_response(std::uint8_t 
     status = response[2];
     size = response[3];
 
+    if (size == 0)
+        return {};
     auto payload = read_register(0x18, size);
     if (payload.size() != size)
         throw std::runtime_error("post-processor response payload length mismatch");
@@ -601,8 +603,9 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
                                                           static_cast<std::uint8_t>((start_register_address >> 24) & 0xFF)});
             print_command_response("fpga-reg-bulk-read", response);
             if (response.payload.size() >= num_registers) {
-                for (std::size_t i = 0; i < num_registers; ++i) {
-                    print_field("reg[" + std::to_string(i) + "]") << "0x" << hex(response.payload[i], 2) << '\n';
+                for (std::size_t i = 0; i < num_registers*4; i+=4) {
+                    uint32_t value = response.payload[i] | (response.payload[i + 1] << 8) | (response.payload[i + 2] << 16) | (response.payload[i + 3] << 24);
+                    print_field("reg[" + std::to_string(i) + "]") << "0x" << hex(value, 8) << '\n';
                 }
             }
             return true;
