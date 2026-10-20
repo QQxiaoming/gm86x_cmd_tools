@@ -250,143 +250,6 @@ bool RegisterCommandGroup::try_run_offline(std::string_view name, const std::vec
 
 bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector<std::string> &args) {
     const std::string name(name_view);
-    if (name == "de100-dump-match-debug-reg") {
-        if (args.size() > 1)
-            throw std::invalid_argument("de100-dump-match-debug-reg accepts at most one <probe_reg>");
-        std::optional<std::uint8_t> filter;
-        if (!args.empty()) {
-            const auto address = parse_u32(args[0]);
-            if (address > 0x24)
-                throw std::invalid_argument("probe register must be in range 0x0..0x24");
-            filter = static_cast<std::uint8_t>(address);
-        }
-
-        set_de100_page(0x80311460, false);
-        std::size_t failures = 0;
-        std::optional<std::uint8_t> current_register;
-        for (const auto &field : de100_match_fields) {
-            if (filter && *filter != field.register_address)
-                continue;
-            if (!current_register || *current_register != field.register_address) {
-                std::cout << "\n=== [" << format_dump_hex(field.register_address, 1) << "] "
-                          << field.register_name << " ===\n";
-                current_register = field.register_address;
-            }
-
-            std::uint32_t value = 0;
-            try {
-                value = read_de100_match_probe(field.register_address, field.offset);
-            } catch (const std::runtime_error &error) {
-                ++failures;
-                std::cout << "  " << std::left << std::setw(28) << field.name << std::right << " [w="
-                          << std::setw(2) << static_cast<unsigned>(field.width) << " off=" << std::setw(2)
-                          << static_cast<unsigned>(field.offset) << "] = <read fail>\n";
-                std::cerr << "DE100 match probe " << field.register_name << '.' << field.name
-                          << " read failed: " << error.what() << '\n';
-                continue;
-            }
-            const auto mask = field.width >= 32 ? 0xffffffffU : (std::uint32_t{1} << field.width) - 1;
-            const auto decoded_value = value & mask;
-            const auto enumeration = decode_match_enum(field.name, decoded_value);
-            std::cout << "  " << std::left << std::setw(28) << field.name << std::right << " [w="
-                      << std::setw(2) << static_cast<unsigned>(field.width) << " off=" << std::setw(2)
-                      << static_cast<unsigned>(field.offset) << "] = " << std::left << std::setw(10)
-                      << decoded_value << std::right << " 0x" << std::uppercase << std::hex << decoded_value
-                      << std::dec << std::nouppercase;
-            if (!enumeration.empty())
-                std::cout << " (" << enumeration << ')';
-            std::cout << '\n';
-        }
-        if (failures)
-            throw std::runtime_error(std::to_string(failures) + " DE100 match probe field(s) failed");
-        return true;
-    }
-    if (name == "de100-dump-registers") {
-        const auto options = parse_de100_dump_options(args);
-        const auto selected = select_de100_registers(options);
-        if (options.list_only) {
-            print_de100_register_list(selected);
-            return true;
-        }
-
-        std::ofstream output_file;
-        std::ostream *csv_output = nullptr;
-        if (options.output) {
-            const auto parent = options.output->parent_path();
-            if (!parent.empty())
-                std::filesystem::create_directories(parent);
-            output_file.open(*options.output, std::ios::out | std::ios::trunc);
-            if (!output_file)
-                throw std::runtime_error("cannot write " + options.output->string());
-            csv_output = &output_file;
-            write_csv_row(output_file, {"module", "register", "address", "offset", "width_bits", "access",
-                                        "value", "status", "description", "source"});
-        }
-
-        std::size_t successes = 0;
-        std::size_t errors = 0;
-        std::string last_module;
-        std::optional<std::uint16_t> current_page;
-        for (const auto *register_info : selected) {
-            const auto byte_count = (register_info->width_bits + 7U) / 8U;
-            std::string value_text;
-            std::string status = "OK";
-            try {
-                std::uint64_t value = 0;
-                for (unsigned byte_offset = 0; byte_offset < byte_count; ++byte_offset) {
-                    const auto address = static_cast<std::uint64_t>(register_info->address) + byte_offset;
-                    if (address > 0xffffffffULL)
-                        throw std::runtime_error("register read exceeds the 32-bit address space");
-                    const auto full_address = static_cast<std::uint32_t>(address);
-                    const auto page = static_cast<std::uint16_t>(full_address >> 16);
-                    if (!current_page || *current_page != page) {
-                        set_de100_page(full_address, false);
-                        current_page = page;
-                    }
-                    value |= static_cast<std::uint64_t>(
-                                 read_de100_byte(static_cast<std::uint16_t>(full_address)))
-                             << (byte_offset * 8);
-                }
-                if (register_info->width_bits < 64)
-                    value &= (std::uint64_t{1} << register_info->width_bits) - 1;
-                value_text = format_dump_hex(value, byte_count * 2);
-                ++successes;
-            } catch (const std::runtime_error &error) {
-                status = "ERROR: " + std::string(error.what());
-                ++errors;
-            }
-
-            if (csv_output) {
-                write_csv_row(*csv_output,
-                              {std::string(register_info->module), std::string(register_info->name),
-                               format_dump_hex(register_info->address, 8),
-                               format_dump_hex(register_info->offset, 0),
-                               std::to_string(register_info->width_bits), std::string(register_info->access),
-                               value_text, status, "", "embedded-trm"});
-                csv_output->flush();
-                if (!*csv_output)
-                    throw std::runtime_error("cannot write " + options.output->string());
-            }
-
-            if (last_module != register_info->module) {
-                std::cout << '[' << register_info->module << "]\n";
-                last_module = register_info->module;
-            }
-            std::cout << "  " << std::left << std::setw(25) << register_info->name << std::right
-                      << (value_text.empty() ? status : value_text) << '\n';
-            if (errors && options.fail_fast)
-                break;
-        }
-
-        if (options.output)
-            std::cout << "saved " << successes << " register(s), " << errors << " error(s) to "
-                      << options.output->string() << '\n';
-        else
-            std::cout << "dumped " << successes << " register(s), " << errors << " error(s) to stdout\n";
-        if (errors)
-            throw std::runtime_error(std::to_string(errors) + " register read(s) failed");
-        return true;
-    }
     if (name == "de100-read") {
         require_args(args, 1, "de100-read requires <reg16>");
         const auto response = execute(GMSL_COMMAND_DE100_READ_REGISTER, le16(parse_u16(args[0])));
@@ -601,6 +464,143 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
         print_field("image_stitch_u_fifo3_underflow") << static_cast<unsigned>(bswap_32(value32)) << '\n';
         value32 = read_de100_reg32((err_num_base_addr+212));
         print_field("image_stitch_u_fifo4_underflow") << static_cast<unsigned>(bswap_32(value32)) << '\n';
+        return true;
+    }
+    if (name == "de100-dump-match-debug-reg") {
+        if (args.size() > 1)
+            throw std::invalid_argument("de100-dump-match-debug-reg accepts at most one <probe_reg>");
+        std::optional<std::uint8_t> filter;
+        if (!args.empty()) {
+            const auto address = parse_u32(args[0]);
+            if (address > 0x24)
+                throw std::invalid_argument("probe register must be in range 0x0..0x24");
+            filter = static_cast<std::uint8_t>(address);
+        }
+
+        set_de100_page(0x80311460, false);
+        std::size_t failures = 0;
+        std::optional<std::uint8_t> current_register;
+        for (const auto &field : de100_match_fields) {
+            if (filter && *filter != field.register_address)
+                continue;
+            if (!current_register || *current_register != field.register_address) {
+                std::cout << "\n=== [" << format_dump_hex(field.register_address, 1) << "] "
+                          << field.register_name << " ===\n";
+                current_register = field.register_address;
+            }
+
+            std::uint32_t value = 0;
+            try {
+                value = read_de100_match_probe(field.register_address, field.offset);
+            } catch (const std::runtime_error &error) {
+                ++failures;
+                std::cout << "  " << std::left << std::setw(28) << field.name << std::right << " [w="
+                          << std::setw(2) << static_cast<unsigned>(field.width) << " off=" << std::setw(2)
+                          << static_cast<unsigned>(field.offset) << "] = <read fail>\n";
+                std::cerr << "DE100 match probe " << field.register_name << '.' << field.name
+                          << " read failed: " << error.what() << '\n';
+                continue;
+            }
+            const auto mask = field.width >= 32 ? 0xffffffffU : (std::uint32_t{1} << field.width) - 1;
+            const auto decoded_value = value & mask;
+            const auto enumeration = decode_match_enum(field.name, decoded_value);
+            std::cout << "  " << std::left << std::setw(28) << field.name << std::right << " [w="
+                      << std::setw(2) << static_cast<unsigned>(field.width) << " off=" << std::setw(2)
+                      << static_cast<unsigned>(field.offset) << "] = " << std::left << std::setw(10)
+                      << decoded_value << std::right << " 0x" << std::uppercase << std::hex << decoded_value
+                      << std::dec << std::nouppercase;
+            if (!enumeration.empty())
+                std::cout << " (" << enumeration << ')';
+            std::cout << '\n';
+        }
+        if (failures)
+            throw std::runtime_error(std::to_string(failures) + " DE100 match probe field(s) failed");
+        return true;
+    }
+    if (name == "de100-dump-registers") {
+        const auto options = parse_de100_dump_options(args);
+        const auto selected = select_de100_registers(options);
+        if (options.list_only) {
+            print_de100_register_list(selected);
+            return true;
+        }
+
+        std::ofstream output_file;
+        std::ostream *csv_output = nullptr;
+        if (options.output) {
+            const auto parent = options.output->parent_path();
+            if (!parent.empty())
+                std::filesystem::create_directories(parent);
+            output_file.open(*options.output, std::ios::out | std::ios::trunc);
+            if (!output_file)
+                throw std::runtime_error("cannot write " + options.output->string());
+            csv_output = &output_file;
+            write_csv_row(output_file, {"module", "register", "address", "offset", "width_bits", "access",
+                                        "value", "status", "description", "source"});
+        }
+
+        std::size_t successes = 0;
+        std::size_t errors = 0;
+        std::string last_module;
+        std::optional<std::uint16_t> current_page;
+        for (const auto *register_info : selected) {
+            const auto byte_count = (register_info->width_bits + 7U) / 8U;
+            std::string value_text;
+            std::string status = "OK";
+            try {
+                std::uint64_t value = 0;
+                for (unsigned byte_offset = 0; byte_offset < byte_count; ++byte_offset) {
+                    const auto address = static_cast<std::uint64_t>(register_info->address) + byte_offset;
+                    if (address > 0xffffffffULL)
+                        throw std::runtime_error("register read exceeds the 32-bit address space");
+                    const auto full_address = static_cast<std::uint32_t>(address);
+                    const auto page = static_cast<std::uint16_t>(full_address >> 16);
+                    if (!current_page || *current_page != page) {
+                        set_de100_page(full_address, false);
+                        current_page = page;
+                    }
+                    value |= static_cast<std::uint64_t>(
+                                 read_de100_byte(static_cast<std::uint16_t>(full_address)))
+                             << (byte_offset * 8);
+                }
+                if (register_info->width_bits < 64)
+                    value &= (std::uint64_t{1} << register_info->width_bits) - 1;
+                value_text = format_dump_hex(value, byte_count * 2);
+                ++successes;
+            } catch (const std::runtime_error &error) {
+                status = "ERROR: " + std::string(error.what());
+                ++errors;
+            }
+
+            if (csv_output) {
+                write_csv_row(*csv_output,
+                              {std::string(register_info->module), std::string(register_info->name),
+                               format_dump_hex(register_info->address, 8),
+                               format_dump_hex(register_info->offset, 0),
+                               std::to_string(register_info->width_bits), std::string(register_info->access),
+                               value_text, status, "", "embedded-trm"});
+                csv_output->flush();
+                if (!*csv_output)
+                    throw std::runtime_error("cannot write " + options.output->string());
+            }
+
+            if (last_module != register_info->module) {
+                std::cout << '[' << register_info->module << "]\n";
+                last_module = register_info->module;
+            }
+            std::cout << "  " << std::left << std::setw(25) << register_info->name << std::right
+                      << (value_text.empty() ? status : value_text) << '\n';
+            if (errors && options.fail_fast)
+                break;
+        }
+
+        if (options.output)
+            std::cout << "saved " << successes << " register(s), " << errors << " error(s) to "
+                      << options.output->string() << '\n';
+        else
+            std::cout << "dumped " << successes << " register(s), " << errors << " error(s) to stdout\n";
+        if (errors)
+            throw std::runtime_error(std::to_string(errors) + " register read(s) failed");
         return true;
     }
     if (name == "isp-read") {
