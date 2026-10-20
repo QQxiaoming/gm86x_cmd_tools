@@ -2,10 +2,15 @@
 
 #include "bytes.hpp"
 
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <optional>
+#include <regex>
 #include <sstream>
+#include <string_view>
 
 #if defined(__linux__)
 #  include <byteswap.h>
@@ -20,6 +25,117 @@
 #endif
 
 namespace gm86x::detail {
+namespace {
+
+struct DocumentedRegister {
+    std::string_view module;
+    std::string_view name;
+    std::uint32_t address;
+    std::uint16_t offset;
+    std::uint8_t width_bits;
+    std::string_view access;
+};
+
+constexpr DocumentedRegister documented_registers[] = {
+#include "de100_registers.inc"
+};
+
+struct De100DumpOptions {
+    std::optional<std::filesystem::path> output;
+    std::optional<std::regex> module;
+    std::optional<std::uint32_t> start;
+    std::optional<std::uint32_t> end;
+    bool include_write_only = false;
+    bool list_only = false;
+    bool fail_fast = false;
+};
+
+De100DumpOptions parse_de100_dump_options(const std::vector<std::string> &args) {
+    De100DumpOptions options;
+    for (std::size_t index = 0; index < args.size(); ++index) {
+        const auto &argument = args[index];
+        const auto require_value = [&](const std::string &option) -> const std::string & {
+            if (index + 1 >= args.size())
+                throw std::invalid_argument(option + " requires a value");
+            return args[++index];
+        };
+        if (argument == "-o" || argument == "--output") {
+            options.output = require_value(argument);
+        } else if (argument == "--module") {
+            options.module.emplace(require_value(argument), std::regex::icase);
+        } else if (argument == "--start") {
+            options.start = parse_u32(require_value(argument));
+        } else if (argument == "--end") {
+            options.end = parse_u32(require_value(argument));
+        } else if (argument == "--include-wo") {
+            options.include_write_only = true;
+        } else if (argument == "--list-only") {
+            options.list_only = true;
+        } else if (argument == "--fail-fast") {
+            options.fail_fast = true;
+        } else {
+            throw std::invalid_argument("unknown de100-dump-registers option: " + argument);
+        }
+    }
+    return options;
+}
+
+std::vector<const DocumentedRegister *> select_de100_registers(const De100DumpOptions &options) {
+    std::vector<const DocumentedRegister *> selected;
+    for (const auto &register_info : documented_registers) {
+        if (!options.include_write_only && register_info.access == "WO")
+            continue;
+        if (options.module && !std::regex_search(register_info.module.begin(), register_info.module.end(),
+                                                  *options.module))
+            continue;
+        if (options.start && register_info.address < *options.start)
+            continue;
+        if (options.end && register_info.address > *options.end)
+            continue;
+        selected.push_back(&register_info);
+    }
+    if (selected.empty())
+        throw std::invalid_argument("no registers matched the requested filters");
+    return selected;
+}
+
+std::string format_dump_hex(std::uint64_t value, int digits) {
+    std::ostringstream output;
+    output << "0x" << std::uppercase << std::hex << std::setw(digits) << std::setfill('0') << value;
+    return output.str();
+}
+
+void print_de100_register_list(const std::vector<const DocumentedRegister *> &selected) {
+    for (const auto *register_info : selected)
+        std::cout << format_dump_hex(register_info->address, 8) << ' ' << register_info->module << '.'
+                  << register_info->name << ' ' << static_cast<unsigned>(register_info->width_bits) << "bit "
+                  << register_info->access << '\n';
+    std::cerr << "listed " << selected.size() << " of " << std::size(documented_registers)
+              << " documented registers\n";
+}
+
+void write_csv_row(std::ostream &output, const std::vector<std::string> &fields) {
+    for (std::size_t index = 0; index < fields.size(); ++index) {
+        if (index)
+            output << ',';
+        const auto &field = fields[index];
+        if (field.find_first_of(",\"\r\n") == std::string::npos) {
+            output << field;
+            continue;
+        }
+        output << '"';
+        for (const auto character : field) {
+            if (character == '"')
+                output << '"';
+            output << character;
+        }
+        output << '"';
+    }
+    output << '\n';
+}
+
+} // namespace
+
 std::uint8_t RegisterCommandGroup::binary_value(const std::string &value, const std::string &command) {
     if (value == "0")
         return 0;
@@ -77,8 +193,104 @@ void RegisterCommandGroup::dump_de100_reg32(std::uint32_t address, std::uint32_t
     }
 }
 
+bool RegisterCommandGroup::try_run_offline(std::string_view name, const std::vector<std::string> &args) {
+    if (name != "de100-dump-registers")
+        return false;
+    const auto options = parse_de100_dump_options(args);
+    if (!options.list_only)
+        return false;
+    print_de100_register_list(select_de100_registers(options));
+    return true;
+}
+
 bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector<std::string> &args) {
     const std::string name(name_view);
+    if (name == "de100-dump-registers") {
+        const auto options = parse_de100_dump_options(args);
+        const auto selected = select_de100_registers(options);
+        if (options.list_only) {
+            print_de100_register_list(selected);
+            return true;
+        }
+
+        std::ofstream output_file;
+        std::ostream *csv_output = nullptr;
+        if (options.output) {
+            const auto parent = options.output->parent_path();
+            if (!parent.empty())
+                std::filesystem::create_directories(parent);
+            output_file.open(*options.output, std::ios::out | std::ios::trunc);
+            if (!output_file)
+                throw std::runtime_error("cannot write " + options.output->string());
+            csv_output = &output_file;
+            write_csv_row(output_file, {"module", "register", "address", "offset", "width_bits", "access",
+                                        "value", "status", "description", "source"});
+        }
+
+        std::size_t successes = 0;
+        std::size_t errors = 0;
+        std::string last_module;
+        std::optional<std::uint16_t> current_page;
+        for (const auto *register_info : selected) {
+            const auto byte_count = (register_info->width_bits + 7U) / 8U;
+            std::string value_text;
+            std::string status = "OK";
+            try {
+                std::uint64_t value = 0;
+                for (unsigned byte_offset = 0; byte_offset < byte_count; ++byte_offset) {
+                    const auto address = static_cast<std::uint64_t>(register_info->address) + byte_offset;
+                    if (address > 0xffffffffULL)
+                        throw std::runtime_error("register read exceeds the 32-bit address space");
+                    const auto full_address = static_cast<std::uint32_t>(address);
+                    const auto page = static_cast<std::uint16_t>(full_address >> 16);
+                    if (!current_page || *current_page != page) {
+                        set_de100_page(full_address, false);
+                        current_page = page;
+                    }
+                    value |= static_cast<std::uint64_t>(
+                                 read_de100_byte(static_cast<std::uint16_t>(full_address)))
+                             << (byte_offset * 8);
+                }
+                if (register_info->width_bits < 64)
+                    value &= (std::uint64_t{1} << register_info->width_bits) - 1;
+                value_text = format_dump_hex(value, byte_count * 2);
+                ++successes;
+            } catch (const std::runtime_error &error) {
+                status = "ERROR: " + std::string(error.what());
+                ++errors;
+            }
+
+            if (csv_output) {
+                write_csv_row(*csv_output,
+                              {std::string(register_info->module), std::string(register_info->name),
+                               format_dump_hex(register_info->address, 8),
+                               format_dump_hex(register_info->offset, 0),
+                               std::to_string(register_info->width_bits), std::string(register_info->access),
+                               value_text, status, "", "embedded-trm"});
+                csv_output->flush();
+                if (!*csv_output)
+                    throw std::runtime_error("cannot write " + options.output->string());
+            }
+
+            if (last_module != register_info->module) {
+                std::cout << '[' << register_info->module << "]\n";
+                last_module = register_info->module;
+            }
+            std::cout << "  " << std::left << std::setw(25) << register_info->name << std::right
+                      << (value_text.empty() ? status : value_text) << '\n';
+            if (errors && options.fail_fast)
+                break;
+        }
+
+        if (options.output)
+            std::cout << "saved " << successes << " register(s), " << errors << " error(s) to "
+                      << options.output->string() << '\n';
+        else
+            std::cout << "dumped " << successes << " register(s), " << errors << " error(s) to stdout\n";
+        if (errors)
+            throw std::runtime_error(std::to_string(errors) + " register read(s) failed");
+        return true;
+    }
     if (name == "de100-read") {
         require_args(args, 1, "de100-read requires <reg16>");
         const auto response = execute(GMSL_COMMAND_DE100_READ_REGISTER, le16(parse_u16(args[0])));

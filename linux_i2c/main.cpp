@@ -78,6 +78,11 @@ int main(int argc, char **argv) {
         }
         if (index >= argc)
             throw std::invalid_argument("missing command");
+        std::vector<std::string> args;
+        for (int i = index + 1; i < argc; ++i)
+            args.emplace_back(argv[i]);
+        if (gm86x::CommandDispatcher::run_offline(argv[index], args))
+            return 0;
         if (scan) {
             const auto found = gm86x::discover_device();
             bus = found.bus;
@@ -89,9 +94,6 @@ int main(int argc, char **argv) {
         gm86x::LinuxI2cTransport transport(bus, address);
         gm86x::ProtocolClient client(transport);
         client.set_polling(retries, interval);
-        std::vector<std::string> args;
-        for (int i = index + 1; i < argc; ++i)
-            args.emplace_back(argv[i]);
         gm86x::CommandContext context{client, sequence, buffer_updates, end_update};
         gm86x::CommandDispatcher dispatcher(context);
         return dispatcher.run(argv[index], args);

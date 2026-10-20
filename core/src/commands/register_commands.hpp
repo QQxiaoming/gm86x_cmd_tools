@@ -12,6 +12,7 @@ class RegisterCommandGroup final : public CommandGroup {
 public:
 	using CommandGroup::CommandGroup;
 	bool try_run(std::string_view name, const std::vector<std::string> &args) override;
+	static bool try_run_offline(std::string_view name, const std::vector<std::string> &args);
 
 private:
 	static std::uint8_t binary_value(const std::string &value, const std::string &command);

@@ -91,13 +91,16 @@ int main(int argc, char **argv) {
         if (index >= argc)
             throw std::invalid_argument("missing command");
 
+        std::vector<std::string> args;
+        for (int i = index + 1; i < argc; ++i)
+            args.emplace_back(argv[i]);
+        if (gm86x::CommandDispatcher::run_offline(argv[index], args))
+            return 0;
+
         gm86x::WindowsUsbXuTransport transport(vendor_id, product_id, device_index, i2c_forward_selector,
                                                2000, debug);
         gm86x::ProtocolClient client(transport);
         client.set_polling(retries, interval);
-        std::vector<std::string> args;
-        for (int i = index + 1; i < argc; ++i)
-            args.emplace_back(argv[i]);
         gm86x::CommandContext context{client, sequence, buffer_updates, end_update};
         context.max_control_transfer_size = max_chunk_size;
         context.max_response_payload_size = max_chunk_size;

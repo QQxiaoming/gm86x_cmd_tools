@@ -305,6 +305,10 @@ int CommandDispatcher::run(std::string_view name, const std::vector<std::string>
     throw std::invalid_argument("unknown command: " + std::string(name));
 }
 
+bool CommandDispatcher::run_offline(std::string_view name, const std::vector<std::string> &args) {
+    return detail::RegisterCommandGroup::try_run_offline(name, args);
+}
+
 void CommandDispatcher::print_help(const std::string &exeName) {
     std::cout << R"(
     -r, --retries <count>    poll retries, default 1000
@@ -339,6 +343,8 @@ Commands:
     de100-read-reg32-val32 <reg32>
     de100-write-reg32-val32 <reg32> <value32>
     de100-dump-reg32 <addr32> <count>
+    de100-dump-registers [--module <regex>] [--start <addr32>] [--end <addr32>]
+                         [--include-wo] [--list-only] [--fail-fast] [-o <csv_file>]
     de100-subsnr-read <1|2|left|right> <reg16>
     de100-subsnr-write <1|2|3|left|right|all> <reg16> <value16>
     de100-get-statistics <sof_eof_num_base_addr> <err_num_base_addr>
@@ -426,6 +432,10 @@ Notes:
     - This tool uses the Linux I2C_RDWR backend instead of debugfs node.
     - Per-request timing logs are enabled by default.
     - Non-zero device or post-processor command status is reported as an error and exits non-zero.
+    - de100-dump-registers reads the embedded documented DE100 register list; use
+      --list-only to show the filtered list without connecting to a device.
+      Global connection options such as --bus, --addr, --seq, --retries, and --interval
+      are specified before the command.
     - Userset slots for write/update/erase commands are 0..128.
     - update-*-chunk offset32 is hexadecimal by default.
     - --buffer-updates 1 sets offset bit31; --buffer-updates 0 clears it.

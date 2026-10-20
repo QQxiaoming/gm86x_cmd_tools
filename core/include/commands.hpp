@@ -113,6 +113,7 @@ public:
 
     void register_group(std::unique_ptr<CommandGroup> group);
     int run(std::string_view name, const std::vector<std::string> &args);
+    static bool run_offline(std::string_view name, const std::vector<std::string> &args);
     static void print_help(const std::string &exeName);
 
 private:

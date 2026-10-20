@@ -81,6 +81,12 @@ int main(int argc, char **argv) {
 		}
 		if (index >= argc)
 			throw std::invalid_argument("missing command");
+		std::vector<std::string> args;
+		for (int i = index + 1; i < argc; ++i)
+			args.emplace_back(argv[i]);
+		if (gm86x::CommandDispatcher::run_offline(argv[index], args))
+			return 0;
+
 		const auto target = gm86x::discover_usb_xu_target(device);
 		const std::uint8_t unit = target.extension_unit_id;
 		printf("Discovered USB XU target: vendor_id=0x%04x, product_id=0x%04x, bus_number=%u, device_address=%u, control_interface=%u, extension_unit_id=%u\n",
@@ -88,9 +94,6 @@ int main(int argc, char **argv) {
 		gm86x::LinuxUsbXuTransport transport(target, unit, i2c_forward_selector);
 		gm86x::ProtocolClient client(transport);
 		client.set_polling(retries, interval);
-		std::vector<std::string> args;
-		for (int i = index + 1; i < argc; ++i)
-			args.emplace_back(argv[i]);
 		gm86x::CommandContext context{client, sequence, buffer_updates, end_update};
 		context.max_control_transfer_size = max_chunk_size;
 		context.max_response_payload_size = max_chunk_size;
