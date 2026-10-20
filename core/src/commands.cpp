@@ -345,6 +345,7 @@ Commands:
     de100-dump-reg32 <addr32> <count>
     de100-dump-registers [--module <regex>] [--start <addr32>] [--end <addr32>]
                          [--include-wo] [--list-only] [--fail-fast] [-o <csv_file>]
+    de100-dump-match-debug-reg [probe_reg]
     de100-subsnr-read <1|2|left|right> <reg16>
     de100-subsnr-write <1|2|3|left|right|all> <reg16> <value16>
     de100-get-statistics <sof_eof_num_base_addr> <err_num_base_addr>

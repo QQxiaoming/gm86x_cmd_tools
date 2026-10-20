@@ -36,8 +36,20 @@ struct DocumentedRegister {
     std::string_view access;
 };
 
+struct De100MatchField {
+    std::uint8_t register_address;
+    std::string_view register_name;
+    std::string_view name;
+    std::uint8_t offset;
+    std::uint8_t width;
+};
+
 constexpr DocumentedRegister documented_registers[] = {
 #include "de100_registers.inc"
+};
+
+constexpr De100MatchField de100_match_fields[] = {
+#include "de100_match_fields.inc"
 };
 
 struct De100DumpOptions {
@@ -103,6 +115,18 @@ std::string format_dump_hex(std::uint64_t value, int digits) {
     std::ostringstream output;
     output << "0x" << std::uppercase << std::hex << std::setw(digits) << std::setfill('0') << value;
     return output.str();
+}
+
+std::string_view decode_match_enum(std::string_view field_name, std::uint32_t value) {
+    if (field_name == "LRC_fsm") {
+        constexpr std::string_view names[] = {"ROW_IN", "ROW_IN_DELAY", "ROW_OUT", "INIT_BUFF"};
+        return names[value];
+    }
+    if (field_name == "fsm_status") {
+        constexpr std::string_view names[] = {"IDLE", "BEFORE_START", "DATA_CALC"};
+        return value < std::size(names) ? names[value] : "UNKNOWN";
+    }
+    return {};
 }
 
 void print_de100_register_list(const std::vector<const DocumentedRegister *> &selected) {
@@ -178,6 +202,27 @@ std::uint32_t RegisterCommandGroup::read_de100_reg32(std::uint32_t address) {
     return value;
 }
 
+std::uint32_t RegisterCommandGroup::read_de100_match_probe(std::uint8_t register_address, std::uint8_t offset) {
+    const auto write_probe_word = [&](std::uint32_t address, std::uint32_t value) {
+        for (unsigned byte_offset = 0; byte_offset < 4; ++byte_offset) {
+            auto payload = le16(static_cast<std::uint16_t>(address + byte_offset));
+            payload.push_back(static_cast<std::uint8_t>(value >> (byte_offset * 8)));
+            execute(GMSL_COMMAND_DE100_WRITE_REGISTER, payload, false, false);
+        }
+    };
+    write_probe_word(0x80311460, register_address);
+    write_probe_word(0x80311464, offset);
+    std::uint32_t value = 0;
+    for (unsigned byte_offset = 0; byte_offset < 4; ++byte_offset) {
+        const auto response = execute(GMSL_COMMAND_DE100_READ_REGISTER,
+                                      le16(static_cast<std::uint16_t>(0x1468 + byte_offset)), false, false);
+        if (response.payload.empty())
+            throw std::runtime_error("DE100 match probe read failed");
+        value |= static_cast<std::uint32_t>(response.payload.back()) << (byte_offset * 8);
+    }
+    return value;
+}
+
 void RegisterCommandGroup::dump_de100_reg32(std::uint32_t address, std::uint32_t count) {
     print_section("de100-dump-reg32");
     std::optional<std::uint16_t> current_page;
@@ -205,6 +250,57 @@ bool RegisterCommandGroup::try_run_offline(std::string_view name, const std::vec
 
 bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector<std::string> &args) {
     const std::string name(name_view);
+    if (name == "de100-dump-match-debug-reg") {
+        if (args.size() > 1)
+            throw std::invalid_argument("de100-dump-match-debug-reg accepts at most one <probe_reg>");
+        std::optional<std::uint8_t> filter;
+        if (!args.empty()) {
+            const auto address = parse_u32(args[0]);
+            if (address > 0x24)
+                throw std::invalid_argument("probe register must be in range 0x0..0x24");
+            filter = static_cast<std::uint8_t>(address);
+        }
+
+        set_de100_page(0x80311460, false);
+        std::size_t failures = 0;
+        std::optional<std::uint8_t> current_register;
+        for (const auto &field : de100_match_fields) {
+            if (filter && *filter != field.register_address)
+                continue;
+            if (!current_register || *current_register != field.register_address) {
+                std::cout << "\n=== [" << format_dump_hex(field.register_address, 1) << "] "
+                          << field.register_name << " ===\n";
+                current_register = field.register_address;
+            }
+
+            std::uint32_t value = 0;
+            try {
+                value = read_de100_match_probe(field.register_address, field.offset);
+            } catch (const std::runtime_error &error) {
+                ++failures;
+                std::cout << "  " << std::left << std::setw(28) << field.name << std::right << " [w="
+                          << std::setw(2) << static_cast<unsigned>(field.width) << " off=" << std::setw(2)
+                          << static_cast<unsigned>(field.offset) << "] = <read fail>\n";
+                std::cerr << "DE100 match probe " << field.register_name << '.' << field.name
+                          << " read failed: " << error.what() << '\n';
+                continue;
+            }
+            const auto mask = field.width >= 32 ? 0xffffffffU : (std::uint32_t{1} << field.width) - 1;
+            const auto decoded_value = value & mask;
+            const auto enumeration = decode_match_enum(field.name, decoded_value);
+            std::cout << "  " << std::left << std::setw(28) << field.name << std::right << " [w="
+                      << std::setw(2) << static_cast<unsigned>(field.width) << " off=" << std::setw(2)
+                      << static_cast<unsigned>(field.offset) << "] = " << std::left << std::setw(10)
+                      << decoded_value << std::right << " 0x" << std::uppercase << std::hex << decoded_value
+                      << std::dec << std::nouppercase;
+            if (!enumeration.empty())
+                std::cout << " (" << enumeration << ')';
+            std::cout << '\n';
+        }
+        if (failures)
+            throw std::runtime_error(std::to_string(failures) + " DE100 match probe field(s) failed");
+        return true;
+    }
     if (name == "de100-dump-registers") {
         const auto options = parse_de100_dump_options(args);
         const auto selected = select_de100_registers(options);

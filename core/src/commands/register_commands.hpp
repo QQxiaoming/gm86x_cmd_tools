@@ -20,6 +20,7 @@ private:
 	void set_de100_page(std::uint32_t address, bool verbose = true);
 	std::uint8_t read_de100_byte(std::uint16_t address);
 	std::uint32_t read_de100_reg32(std::uint32_t address);
+	std::uint32_t read_de100_match_probe(std::uint8_t register_address, std::uint8_t offset);
 	void dump_de100_reg32(std::uint32_t address, std::uint32_t count);
 };
 
