@@ -395,6 +395,22 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
         }
         return true;
     }
+    if (name == "post-processor-hw-raw-write") {
+        if (args.empty())
+            throw std::invalid_argument("post-processor-hw-raw-write requires <data>");
+        execute(GMSL_COMMAND_POST_PROCESSOR_HW_RAW_WRITE, parse_byte_list(args));
+        return true;
+    }
+    if (name == "post-processor-hw-raw-read") {
+        require_args(args, 1, "post-processor-hw-raw-read requires <size>");
+        const auto response = execute(GMSL_COMMAND_POST_PROCESSOR_HW_RAW_READ, le16(parse_u16(args[0])));
+        if (response.status == 0 && !response.payload.empty()) {
+            print_section("post-processor-hw-raw-read");
+            print_field("payload") << response.payload.size() << " bytes\n";
+            print_hex_dump(response.payload);
+        }
+        return true;
+    }
     if (name == "post-processor-register-write") {
         require_args(args, 2, "post-processor-register-write requires <register> <value>");
         auto reg = parse_byte(args[0]);
