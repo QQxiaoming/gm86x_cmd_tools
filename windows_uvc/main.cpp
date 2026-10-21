@@ -21,7 +21,7 @@ static void print_help(const std::string &exe_name) {
     )" << name << R"( [global options] <command> [args...]
 
 Global options:
-    -V, --version            print version and build information
+    -V, --version           print version and build information
     -v, --vid <hex>         USB vendor id, default 0x2ac1
     -p, --pid <hex>         USB product id, default 0xfd00
     -n, --index <decimal>   matching device index, default 0

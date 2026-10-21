@@ -23,7 +23,9 @@ static void print_help(const std::string &exe_name) {
 
 Global options:
     -V, --version            print version and build information
-    -d, --device <path>      UVC video node, default /dev/video6
+    -v, --vid <hex>          USB vendor id, default 0x2ac1
+    -p, --pid <hex>          USB product id, default 0xfd00
+    -n, --index <decimal>    matching device index, default 0
 
 Talks to the UVC extension unit directly via libusb control transfers
 (bypassing the uvcvideo driver's XU control size limit). UVC I2C_FORWARD
@@ -34,7 +36,9 @@ uses fixed XU Control Selector 0x05.
 
 int main(int argc, char **argv) {
 	try {
-		std::string device = "/dev/video6";
+		std::uint16_t vendor_id = 0x2ac1;
+		std::uint16_t product_id = 0xfd00;
+		std::size_t device_index = 0;
 		std::uint8_t sequence = 1;
 		std::optional<bool> buffer_updates;
 		bool end_update = false;
@@ -57,8 +61,12 @@ int main(int argc, char **argv) {
 				gm86x::print_build_info(argv[0]);
 				return 0;
 			}
-			if ((option == "-d" || option == "--device") && index < argc)
-				device = argv[index++];
+			if ((option == "-v" || option == "--vid") && index < argc)
+				vendor_id = gm86x::parse_u16(argv[index++]);
+			else if ((option == "-p" || option == "--pid") && index < argc)
+				product_id = gm86x::parse_u16(argv[index++]);
+			else if ((option == "-n" || option == "--index") && index < argc)
+				device_index = gm86x::parse_decimal_or_hex_u32(argv[index++]);
 			else if (option == "--buffer-updates") {
 				if (index >= argc || (std::string(argv[index]) != "0" && std::string(argv[index]) != "1"))
 					throw std::invalid_argument("--buffer-updates requires <0|1>");
@@ -87,7 +95,7 @@ int main(int argc, char **argv) {
 		if (gm86x::CommandDispatcher::run_offline(argv[index], args))
 			return 0;
 
-		const auto target = gm86x::discover_usb_xu_target(device);
+		const auto target = gm86x::discover_usb_xu_target(vendor_id, product_id, device_index);
 		const std::uint8_t unit = target.extension_unit_id;
 		printf("Discovered USB XU target: vendor_id=0x%04x, product_id=0x%04x, bus_number=%u, device_address=%u, control_interface=%u, extension_unit_id=%u\n",
 			target.vendor_id, target.product_id, target.bus_number, target.device_address, target.control_interface, target.extension_unit_id);

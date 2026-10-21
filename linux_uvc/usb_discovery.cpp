@@ -2,11 +2,16 @@
 
 #include <libusb-1.0/libusb.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
+#include <tuple>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -19,8 +24,6 @@ constexpr std::uint8_t uvc_subclass_control = 0x01;
 constexpr std::uint8_t uvc_cs_interface = 0x24;
 constexpr std::uint8_t uvc_vc_extension_unit = 0x06;
 
-std::string basename_of(const fs::path &path) { return path.filename().string(); }
-
 unsigned read_attr(const fs::path &file, int base) {
 	std::ifstream stream(file);
 	if (!stream.is_open())
@@ -30,24 +33,59 @@ unsigned read_attr(const fs::path &file, int base) {
 	return static_cast<unsigned>(std::stoul(value, nullptr, base));
 }
 
-// Resolves the sysfs USB device directory backing a V4L2 video node. The
-// "device" symlink may point at any interface of the device (streaming or
-// control), so walk up until the directory with idVendor/idProduct is found
-// instead of assuming a fixed number of parent levels.
-fs::path resolve_usb_device_dir(const std::string &video_device) {
-	const auto node_name = basename_of(fs::path(video_device));
-	const fs::path class_link = fs::path("/sys/class/video4linux") / node_name / "device";
-	if (!fs::exists(class_link))
-		throw std::runtime_error("no sysfs entry for video device: " + video_device);
-
-	fs::path device_dir = fs::canonical(class_link);
+// The "device" symlink may point at any interface of the USB device, so walk
+// up until the directory with idVendor/idProduct is found.
+std::optional<fs::path> resolve_usb_device_dir(const fs::path &class_link) {
+	std::error_code error;
+	fs::path device_dir = fs::canonical(class_link, error);
+	if (error)
+		return std::nullopt;
 	while (!fs::exists(device_dir / "idVendor") || !fs::exists(device_dir / "idProduct")) {
 		const fs::path parent = device_dir.parent_path();
 		if (parent == device_dir)
-			throw std::runtime_error("resolved sysfs path is not a USB device: " + video_device);
+			return std::nullopt;
 		device_dir = parent;
 	}
 	return device_dir;
+}
+
+struct UsbDeviceCandidate {
+	fs::path directory;
+	std::uint8_t bus_number;
+	std::uint8_t device_address;
+};
+
+std::vector<UsbDeviceCandidate> find_video_usb_devices(std::uint16_t vendor_id, std::uint16_t product_id) {
+	const fs::path video_class("/sys/class/video4linux");
+	if (!fs::exists(video_class))
+		throw std::runtime_error("sysfs video4linux class path not found");
+
+	std::vector<UsbDeviceCandidate> candidates;
+	std::set<fs::path> seen;
+	for (const auto &entry : fs::directory_iterator(video_class)) {
+		const auto node_name = entry.path().filename().string();
+		if (!node_name.starts_with("video"))
+			continue;
+
+		const auto device_dir = resolve_usb_device_dir(entry.path() / "device");
+		if (!device_dir || !seen.insert(*device_dir).second)
+			continue;
+		if (read_attr(*device_dir / "idVendor", 16) != vendor_id ||
+			read_attr(*device_dir / "idProduct", 16) != product_id)
+			continue;
+
+		candidates.push_back({
+			*device_dir,
+			static_cast<std::uint8_t>(read_attr(*device_dir / "busnum", 10)),
+			static_cast<std::uint8_t>(read_attr(*device_dir / "devnum", 10)),
+		});
+	}
+
+	std::sort(candidates.begin(), candidates.end(), [](const auto &left, const auto &right) {
+		return std::tie(left.bus_number, left.device_address) <
+			   std::tie(right.bus_number, right.device_address);
+	});
+	return candidates;
 }
 
 // Locates the UVC VideoControl interface and its extension unit by parsing
@@ -90,14 +128,22 @@ bool find_extension_unit(libusb_device *device, UsbXuTarget &target) {
 
 } // namespace
 
-UsbXuTarget discover_usb_xu_target(const std::string &video_device) {
-	const fs::path usb_device_dir = resolve_usb_device_dir(video_device);
+UsbXuTarget discover_usb_xu_target(std::uint16_t vendor_id, std::uint16_t product_id,
+								   std::size_t device_index) {
+	const auto candidates = find_video_usb_devices(vendor_id, product_id);
+	if (candidates.empty())
+		throw std::runtime_error("no V4L2 USB device found matching the requested vendor and product IDs");
+	if (device_index >= candidates.size())
+		throw std::runtime_error("matching USB device index out of range: " + std::to_string(device_index) +
+								 " (found " + std::to_string(candidates.size()) + ")");
 
+	const auto &candidate = candidates[device_index];
+	const fs::path &usb_device_dir = candidate.directory;
 	UsbXuTarget target{};
 	target.vendor_id = static_cast<std::uint16_t>(read_attr(usb_device_dir / "idVendor", 16));
 	target.product_id = static_cast<std::uint16_t>(read_attr(usb_device_dir / "idProduct", 16));
-	target.bus_number = static_cast<std::uint8_t>(read_attr(usb_device_dir / "busnum", 10));
-	target.device_address = static_cast<std::uint8_t>(read_attr(usb_device_dir / "devnum", 10));
+	target.bus_number = candidate.bus_number;
+	target.device_address = candidate.device_address;
 
 	libusb_context *context = nullptr;
 	if (libusb_init(&context) != LIBUSB_SUCCESS)
@@ -122,7 +168,8 @@ UsbXuTarget discover_usb_xu_target(const std::string &video_device) {
 	libusb_exit(context);
 
 	if (!found)
-		throw std::runtime_error("no UVC extension unit found for device: " + video_device);
+		throw std::runtime_error("no UVC extension unit found for matching USB device at index " +
+								 std::to_string(device_index));
 
 	return target;
 }
