@@ -34,6 +34,7 @@ struct DocumentedRegister {
     std::uint16_t offset;
     std::uint8_t width_bits;
     std::string_view access;
+    std::string_view endian;
 };
 
 struct De100MatchField {
@@ -563,6 +564,14 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
                                  read_de100_byte(static_cast<std::uint16_t>(full_address)))
                              << (byte_offset * 8);
                 }
+                bool msb = (register_info->endian == "MSB");
+                if (msb && byte_count > 1) {
+                    std::uint64_t reversed_value = 0;
+                    for (unsigned i = 0; i < byte_count; ++i) {
+                        reversed_value |= ((value >> (i * 8)) & 0xFF) << ((byte_count - 1 - i) * 8);
+                    }
+                    value = reversed_value;
+                }
                 if (register_info->width_bits < 64)
                     value &= (std::uint64_t{1} << register_info->width_bits) - 1;
                 value_text = format_dump_hex(value, byte_count * 2);
@@ -588,7 +597,7 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
                 std::cout << '[' << register_info->module << "]\n";
                 last_module = register_info->module;
             }
-            std::cout << "  " << std::left << std::setw(25) << register_info->name << std::right
+            std::cout << "  " << std::left << std::setw(35) << register_info->name << std::right
                       << (value_text.empty() ? status : value_text) << '\n';
             if (errors && options.fail_fast)
                 break;
