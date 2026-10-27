@@ -15,13 +15,13 @@ public:
 	bool try_run(std::string_view name, const std::vector<std::string> &args) override;
 
 private:
-	void print_probe(const std::vector<std::uint8_t> &data) const;
-	void print_imu_samples(const std::vector<std::uint8_t> &payload) const;
 	const char *isp_model_name(std::uint8_t model) const;
-	void print_status(const std::vector<std::uint8_t> &payload) const;
 	std::uint8_t temperature_channel(const std::string &value) const;
 	std::uint8_t pps_mode(const std::string &value) const;
 	std::uint8_t pps_period(const std::string &value) const;
+	void print_status(const std::vector<std::uint8_t> &payload) const;
+	void print_probe(const std::vector<std::uint8_t> &data) const;
+	void print_imu_samples(const std::vector<std::uint8_t> &payload) const;
 };
 
 }

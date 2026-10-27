@@ -14,34 +14,6 @@
 #include <thread>
 
 namespace gm86x::detail {
-const char *PartitionCommandGroup::isp_update_status_name(std::uint8_t status) {
-    switch (status) {
-    case 0:
-        return "IDLE";
-    case 1:
-        return "PENDING";
-    case 2:
-        return "RUNNING";
-    case 3:
-        return "SUCCESS";
-    case 4:
-        return "FAILED";
-    default:
-        return "UNKNOWN";
-    }
-}
-
-void PartitionCommandGroup::print_isp_pending(const Response &response) const {
-    if (response.status != 0 || response.payload.size() != 10)
-        return;
-    const auto status = response.payload[0];
-    print_section("isp-fw-update");
-    print_field("status") << static_cast<unsigned>(status) << " (" << isp_update_status_name(status) << ")\n";
-    print_field("pending") << static_cast<unsigned>(response.payload[1]) << '\n';
-    print_field("addr") << "0x" << hex(read_le_u32(std::span<const std::uint8_t>(response.payload).subspan(2)), 8)
-                        << '\n';
-    print_field("size") << read_le_u32(std::span<const std::uint8_t>(response.payload).subspan(6)) << '\n';
-}
 
 std::uint32_t PartitionCommandGroup::encode_update_offset(std::uint32_t offset) const {
     if (offset >= 0x40000000U) {
