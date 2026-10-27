@@ -211,12 +211,12 @@ void PostProcessorCommandGroup::print_stream_status(std::string_view name, std::
     const auto format = data[3];
     const auto frame_width = read_le_u16(data, 4);
     const auto height = read_le_u16(data, 6);
-    const auto interval = read_le32(data.subspan(8));
+    const auto interval = read_le_u32(data.subspan(8));
     const auto control_gen = read_le_u16(data, 12);
     const auto last_sequence = data[14];
     const auto last_action = data[15];
-    const auto mipi_error_count = read_le32(data.subspan(16));
-    const auto dropped_frame_count = read_le32(data.subspan(20));
+    const auto mipi_error_count = read_le_u32(data.subspan(16));
+    const auto dropped_frame_count = read_le_u32(data.subspan(20));
 
     print_field("state", width, indent) << static_cast<unsigned>(state) << " (" << stream_state_name(state) << ")\n";
     const auto flags_name = stream_flags_name(flags);
@@ -245,8 +245,8 @@ void PostProcessorCommandGroup::print_get_status(std::span<const std::uint8_t> p
     print_field("protocol_version", width) << static_cast<unsigned>(payload[0]) << '\n';
     print_field("firmware", width) << static_cast<unsigned>(payload[1]) << '.' << static_cast<unsigned>(payload[2])
                                    << '\n';
-    print_field("boot_id", width) << "0x" << hex(read_le32(payload.subspan(4)), 8) << '\n';
-    print_field("uptime_ms", width) << read_le32(payload.subspan(8)) << '\n';
+    print_field("boot_id", width) << "0x" << hex(read_le_u32(payload.subspan(4)), 8) << '\n';
+    print_field("uptime_ms", width) << read_le_u32(payload.subspan(8)) << '\n';
     print_field("usb_speed", width) << static_cast<unsigned>(payload[12]) << " (" << usb_speed_name(payload[12])
                                     << ")\n";
     print_field("usb_dev_state", width) << static_cast<unsigned>(payload[13]) << '\n';
@@ -311,7 +311,7 @@ void PostProcessorCommandGroup::print_get_caps(std::span<const std::uint8_t> pay
     const auto speed_caps_name = usb_speed_caps_name(payload[3]);
     print_field("usb_speed_caps", width) << "0x" << hex(payload[3], 2)
                                         << (speed_caps_name.empty() ? "" : " (" + speed_caps_name + ")") << '\n';
-    const auto mask = read_le32(payload.subspan(4));
+    const auto mask = read_le_u32(payload.subspan(4));
     const auto mask_name = command_mask_name(mask);
     print_field("command_mask", width) << "0x" << hex(mask, 8)
                                        << (mask_name.empty() ? "" : ": " + mask_name) << '\n';
@@ -371,10 +371,10 @@ void PostProcessorCommandGroup::print_get_stream_caps(std::span<const std::uint8
         print_field("frame_interval_type", width, 4) << static_cast<unsigned>(payload[offset + 3]) << '\n';
         print_field("width", width, 4) << read_le_u16(payload, offset + 4) << '\n';
         print_field("height", width, 4) << read_le_u16(payload, offset + 6) << '\n';
-        print_field("default_interval", width, 4) << read_le32(payload.subspan(offset + 8)) << '\n';
-        print_field("min_interval", width, 4) << read_le32(payload.subspan(offset + 12)) << '\n';
-        print_field("max_interval", width, 4) << read_le32(payload.subspan(offset + 16)) << '\n';
-        print_field("interval_step", width, 4) << read_le32(payload.subspan(offset + 20)) << '\n';
+        print_field("default_interval", width, 4) << read_le_u32(payload.subspan(offset + 8)) << '\n';
+        print_field("min_interval", width, 4) << read_le_u32(payload.subspan(offset + 12)) << '\n';
+        print_field("max_interval", width, 4) << read_le_u32(payload.subspan(offset + 16)) << '\n';
+        print_field("interval_step", width, 4) << read_le_u32(payload.subspan(offset + 20)) << '\n';
     }
 }
 
@@ -527,12 +527,12 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
             if (response.status == 0) {
                 require_payload_size(response.payload, 24, "get-statistics");
                 const auto data = std::span<const std::uint8_t>(response.payload);
-                print_field("request_count") << read_le32(data) << '\n';
-                print_field("response_count") << read_le32(data.subspan(4)) << '\n';
-                print_field("duplicate_count") << read_le32(data.subspan(8)) << '\n';
-                print_field("bad_frame_count") << read_le32(data.subspan(12)) << '\n';
-                print_field("busy_count") << read_le32(data.subspan(16)) << '\n';
-                print_field("i2c_error_count") << read_le32(data.subspan(20)) << '\n';
+                print_field("request_count") << read_le_u32(data) << '\n';
+                print_field("response_count") << read_le_u32(data.subspan(4)) << '\n';
+                print_field("duplicate_count") << read_le_u32(data.subspan(8)) << '\n';
+                print_field("bad_frame_count") << read_le_u32(data.subspan(12)) << '\n';
+                print_field("busy_count") << read_le_u32(data.subspan(16)) << '\n';
+                print_field("i2c_error_count") << read_le_u32(data.subspan(20)) << '\n';
             }
             return true;
         }
@@ -564,14 +564,14 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
                 print_field("state") << static_cast<unsigned>(data[1]) << '\n';
                 print_field("last_op") << "0x" << hex(data[2], 2) << '\n';
                 print_field("last_result") << static_cast<unsigned>(data[3]) << '\n';
-                print_field("session_id") << read_le32(data.subspan(4)) << '\n';
-                print_field("next_offset") << read_le32(data.subspan(8)) << '\n';
-                print_field("image_size") << read_le32(data.subspan(12)) << '\n';
+                print_field("session_id") << read_le_u32(data.subspan(4)) << '\n';
+                print_field("next_offset") << read_le_u32(data.subspan(8)) << '\n';
+                print_field("image_size") << read_le_u32(data.subspan(12)) << '\n';
                 print_field("running_slot") << static_cast<unsigned>(data[16]) << '\n';
                 print_field("target_slot") << static_cast<unsigned>(data[17]) << '\n';
                 print_field("owner") << static_cast<unsigned>(data[18]) << '\n';
                 print_field("flags") << "0x" << hex(data[19], 2) << '\n';
-                print_field("bootinfo_generation") << read_le32(data.subspan(20)) << '\n';
+                print_field("bootinfo_generation") << read_le_u32(data.subspan(20)) << '\n';
             }
             return true;
         }

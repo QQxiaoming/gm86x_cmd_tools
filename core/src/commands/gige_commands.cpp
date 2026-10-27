@@ -11,19 +11,6 @@
 
 namespace gm86x::detail {
 
-float GigeCommandGroup::parse_float(const std::string &value) {
-    return std::stof(value);
-}
-
-float GigeCommandGroup::read_float(std::span<const std::uint8_t> data) {
-    if (data.size() < 4)
-        throw std::runtime_error("short float payload");
-    const auto bits = read_le32(data);
-    float value;
-    std::memcpy(&value, &bits, sizeof value);
-    return value;
-}
-
 std::vector<std::uint8_t> GigeCommandGroup::gige_header(const std::string &address, std::uint16_t size) {
     auto payload = le32(parse_regaddr(address));
     append_to(payload, le16(size));
@@ -54,7 +41,7 @@ std::size_t GigeCommandGroup::access_map_address_column_width(const Response &re
     std::size_t width = 0;
     for (std::size_t index = 0; index < entries; ++index) {
         const auto offset = index * 5;
-        const auto address = read_le32(std::span<const std::uint8_t>(response.payload).subspan(offset));
+        const auto address = read_le_u32(std::span<const std::uint8_t>(response.payload).subspan(offset));
         width = std::max(width, std::string("addr=" + regaddr_label(address)).size());
     }
     return width + 2;
@@ -76,7 +63,7 @@ void GigeCommandGroup::print_access_map_page(std::size_t start_index, const Resp
         addressColumnWidth = access_map_address_column_width(response);
     for (std::size_t index = 0; index < entries; ++index) {
         const auto offset = index * 5;
-        const auto address = read_le32(std::span<const std::uint8_t>(response.payload).subspan(offset));
+        const auto address = read_le_u32(std::span<const std::uint8_t>(response.payload).subspan(offset));
         const auto attr = response.payload[offset + 4];
         std::string access;
         if (attr & 1)
@@ -111,7 +98,7 @@ std::size_t GigeCommandGroup::long_ack_time_map_address_column_width(const Respo
         throw std::runtime_error("long-ack-time-map payload length is not a multiple of 8");
     std::size_t width = 0;
     for (std::size_t offset = 0; offset < response.payload.size(); offset += 8) {
-        const auto address = read_le32(std::span<const std::uint8_t>(response.payload).subspan(offset));
+        const auto address = read_le_u32(std::span<const std::uint8_t>(response.payload).subspan(offset));
         width = std::max(width, std::string("addr=" + regaddr_label(address)).size());
     }
     return width + 2;
@@ -133,7 +120,7 @@ void GigeCommandGroup::print_long_ack_time_map_page(std::size_t start_index, con
         addressColumnWidth = long_ack_time_map_address_column_width(response);
     for (std::size_t index = 0; index < entries; ++index) {
         const auto offset = index * 8;
-        const auto address = read_le32(std::span<const std::uint8_t>(response.payload).subspan(offset));
+        const auto address = read_le_u32(std::span<const std::uint8_t>(response.payload).subspan(offset));
         const auto read_timeout = static_cast<unsigned>(response.payload[offset + 4] |
                                                        response.payload[offset + 5] << 8);
         const auto write_timeout = static_cast<unsigned>(response.payload[offset + 6] |
@@ -167,9 +154,9 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
             throw std::runtime_error(std::string("GigE read failed: ") + status_name(response.status));
         print_section(name);
         if (name == "gige-read-u32")
-            print_field("value") << read_le32(response.payload) << '\n';
+            print_field("value") << read_le_u32(response.payload) << '\n';
         else if (name == "gige-read-i32")
-            print_field("value") << static_cast<std::int32_t>(read_le32(response.payload)) << '\n';
+            print_field("value") << static_cast<std::int32_t>(read_le_u32(response.payload)) << '\n';
         else if (name == "gige-read-float")
             print_field("value") << read_float(response.payload) << '\n';
         return true;

@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
+#include <cstring>
 
 namespace gm86x {
 
@@ -33,6 +34,18 @@ std::uint64_t parse_u64(const std::string &text) {
     return parse_integer(text, 0xffffffffffffffffULL, "u64");
 }
 
+std::int64_t parse_i64(const std::string &text) {
+    std::int64_t value = 0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value, 10);
+    if (text.empty() || error != std::errc{} || end != text.data() + text.size())
+        throw std::invalid_argument("invalid i64: " + text);
+    return value;
+}
+
+float parse_float(const std::string &text) {
+    return std::stof(text);
+}
+
 std::uint32_t parse_decimal_or_hex_u32(const std::string &text) {
     if (!text.empty() && text.find_first_not_of("0123456789") == std::string::npos) {
         std::uint64_t value = 0;
@@ -55,14 +68,6 @@ std::int32_t parse_decimal_or_hex_i32(const std::string &text) {
     return static_cast<std::int32_t>(parse_u32(text));
 }
 
-std::int64_t parse_i64(const std::string &text) {
-    std::int64_t value = 0;
-    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value, 10);
-    if (text.empty() || error != std::errc{} || end != text.data() + text.size())
-        throw std::invalid_argument("invalid i64: " + text);
-    return value;
-}
-
 std::vector<std::uint8_t> parse_byte_list(std::span<const std::string> values) {
     std::vector<std::uint8_t> result;
     for (const auto &value : values)
@@ -74,6 +79,36 @@ std::uint16_t read_le_u16(std::span<const std::uint8_t> data, std::size_t offset
     if (offset + 2 > data.size())
         throw std::runtime_error("short little-endian u16");
     return static_cast<std::uint16_t>(data[offset] | (data[offset + 1] << 8));
+}
+
+std::int16_t read_le_s16(std::span<const std::uint8_t> data, std::size_t offset) {
+    return static_cast<std::int16_t>(read_le_u16(data, offset));
+}
+
+std::uint32_t read_le_u32(std::span<const std::uint8_t> data, std::size_t offset) {
+    if (offset + 4 > data.size())
+        throw std::runtime_error("short u32 payload");
+    return static_cast<std::uint32_t>(data[offset] | data[offset + 1] << 8 | data[offset + 2] << 16 |
+                                      data[offset + 3] << 24);
+}
+
+std::uint64_t read_le_u64(std::span<const std::uint8_t> data, std::size_t offset) {
+    if (offset + 8 > data.size())
+        throw std::runtime_error("short u64 payload");
+    std::uint64_t value = 0;
+    for (std::size_t index = 0; index < 8; ++index)
+        value |= static_cast<std::uint64_t>(data[offset + index]) << (index * 8);
+    return value;
+}
+
+float read_float(std::span<const std::uint8_t> data, std::size_t offset) {
+    if (offset + 4 > data.size())
+        throw std::runtime_error("short float status field");
+    const auto bits = static_cast<std::uint32_t>(data[offset] | data[offset + 1] << 8 | data[offset + 2] << 16 |
+                                                 data[offset + 3] << 24);
+    float value;
+    std::memcpy(&value, &bits, sizeof value);
+    return value;
 }
 
 void append_le_u16(std::vector<std::uint8_t> &data, std::uint16_t value) {

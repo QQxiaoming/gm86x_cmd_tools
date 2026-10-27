@@ -23,41 +23,11 @@ void BasicCommandGroup::print_probe(const std::vector<std::uint8_t> &data) const
     print_field("payload_fifo_size", 17) << read_le_u16(data, 4) << '\n';
 }
 
-std::int16_t BasicCommandGroup::read_s16(std::span<const std::uint8_t> data, std::size_t offset) const {
-    return static_cast<std::int16_t>(read_le_u16(data, offset));
-}
-
-float BasicCommandGroup::read_float(std::span<const std::uint8_t> data, std::size_t offset) const {
-    if (offset + 4 > data.size())
-        throw std::runtime_error("short float status field");
-    const auto bits = static_cast<std::uint32_t>(data[offset] | data[offset + 1] << 8 | data[offset + 2] << 16 |
-                                                 data[offset + 3] << 24);
-    float value;
-    std::memcpy(&value, &bits, sizeof value);
-    return value;
-}
-
 std::string BasicCommandGroup::ascii_field(std::span<const std::uint8_t> data, std::size_t offset, std::size_t length) const {
     std::string value;
     for (std::size_t index = offset; index < offset + length && index < data.size() && data[index]; ++index)
         value += data[index] >= 32 && data[index] <= 126 ? static_cast<char>(data[index]) : '.';
     return value;
-}
-
-std::uint64_t BasicCommandGroup::read_le64(std::span<const std::uint8_t> data) const {
-    if (data.size() < 8)
-        throw std::runtime_error("short u64 payload");
-    std::uint64_t value = 0;
-    for (std::size_t index = 0; index < 8; ++index)
-        value |= static_cast<std::uint64_t>(data[index]) << (index * 8);
-    return value;
-}
-
-std::uint32_t BasicCommandGroup::read_le32(std::span<const std::uint8_t> data, std::size_t offset) const {
-    if (offset + 4 > data.size())
-        throw std::runtime_error("short u32 payload");
-    return static_cast<std::uint32_t>(data[offset] | data[offset + 1] << 8 | data[offset + 2] << 16 |
-                                      data[offset + 3] << 24);
 }
 
 void BasicCommandGroup::print_imu_samples(const std::vector<std::uint8_t> &payload) const {
@@ -72,9 +42,9 @@ void BasicCommandGroup::print_imu_samples(const std::vector<std::uint8_t> &paylo
             break;
         const auto data = std::span<const std::uint8_t>(payload);
         print_section("sample " + std::to_string(sample), 2);
-        print_field("timestamp_us", 17, 4) << read_le64(data.subspan(base)) << '\n';
-        print_field("sensor_time_raw", 17, 4) << read_le32(data, base + 8) << '\n';
-        print_field("sensor_temp_raw", 17, 4) << static_cast<std::int32_t>(read_le32(data, base + 12)) << '\n';
+        print_field("timestamp_us", 17, 4) << read_le_u64(data.subspan(base)) << '\n';
+        print_field("sensor_time_raw", 17, 4) << read_le_u32(data, base + 8) << '\n';
+        print_field("sensor_temp_raw", 17, 4) << static_cast<std::int32_t>(read_le_u32(data, base + 12)) << '\n';
         print_field("accel_x_ms2", 17, 4) << std::setprecision(9) << read_float(data, base + 16) << '\n';
         print_field("accel_y_ms2", 17, 4) << read_float(data, base + 20) << '\n';
         print_field("accel_z_ms2", 17, 4) << read_float(data, base + 24) << '\n';
@@ -175,10 +145,10 @@ void BasicCommandGroup::print_status(const std::vector<std::uint8_t> &payload) c
     print_field("i2c", width, indent) << "0x" << hex(data[119], 2) << '\n';
     print_field("last", width, indent) << "0x" << hex(data[120], 2) << " (" << status_name(data[120]) << ")\n";
     print_field("valid_flags", width, indent) << "0x" << hex(data[121], 2) << '\n';
-    print_field("left_centi_c", width, indent) << read_s16(data, 122) << '\n';
-    print_field("right_centi_c", width, indent) << read_s16(data, 124) << '\n';
-    print_field("laser_centi_c", width, indent) << read_s16(data, 126) << '\n';
-    print_field("laser2_centi_c", width, indent) << read_s16(data, 128) << '\n';
+    print_field("left_centi_c", width, indent) << read_le_s16(data, 122) << '\n';
+    print_field("right_centi_c", width, indent) << read_le_s16(data, 124) << '\n';
+    print_field("laser_centi_c", width, indent) << read_le_s16(data, 126) << '\n';
+    print_field("laser2_centi_c", width, indent) << read_le_s16(data, 128) << '\n';
 
     print_section("heap", 2);
     print_field("avail", width, indent) << u32(130) << " bytes\n";
@@ -303,7 +273,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
             return true;
         if (response.payload.size() == 8) {
             print_section("get-timestamp");
-            print_field("timestamp_us", 12) << read_le64(response.payload) << '\n';
+            print_field("timestamp_us", 12) << read_le_u64(response.payload) << '\n';
         }
         return true;
     }
@@ -321,8 +291,8 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
             throw std::runtime_error("time-sync-exchange response must contain 16 bytes");
         const auto payload = std::span<const std::uint8_t>(response.payload);
         print_section("time-sync-exchange");
-        print_field("device_receive_us", 19) << read_le64(payload.first(8)) << '\n';
-        print_field("device_response_us", 19) << read_le64(payload.subspan(8)) << '\n';
+        print_field("device_receive_us", 19) << read_le_u64(payload.first(8)) << '\n';
+        print_field("device_response_us", 19) << read_le_u64(payload.subspan(8)) << '\n';
         return true;
     }
     if (name == "adjust-timestamp") {
@@ -366,7 +336,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
         const auto response = execute(GMSL_COMMAND_TEMP_READ, {channel});
         if (response.status == 0 && response.payload.size() == 2) {
             print_section("temperature");
-            print_field("centi_deg_c") << read_s16(response.payload, 0) << '\n';
+            print_field("centi_deg_c") << read_le_s16(response.payload, 0) << '\n';
         }
         return true;
     }
@@ -450,7 +420,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
         response = execute(GMSL_COMMAND_GIGE_CAM_READ_REGISTER, payload,false,false);
         if (response.status != 0)
             throw std::runtime_error("ErrCode read failed");
-        uint32_t errcode = read_le32(response.payload, 0);
+        uint32_t errcode = read_le_u32(response.payload, 0);
         response = execute(GMSL_COMMAND_GET_FIRMWARE_VERSION,{},false,false);
         if (response.status != 0)
             throw std::runtime_error("Firmware version read failed");
@@ -483,7 +453,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
             print_field("status") << static_cast<unsigned>(response.status) << '\n';
         } else {
             print_section("percipio-debug-read32");
-            print_field("value") << read_le32(response.payload, 0) << '\n';
+            print_field("value") << read_le_u32(response.payload, 0) << '\n';
         }
         return true;
     }

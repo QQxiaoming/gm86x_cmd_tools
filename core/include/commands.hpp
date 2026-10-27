@@ -102,7 +102,6 @@ protected:
     static std::vector<std::uint8_t> le64(std::uint64_t value);
     static void append_to(std::vector<std::uint8_t> &target, std::span<const std::uint8_t> source);
     static std::uint8_t userset_slot(const std::string &raw);
-    static std::uint32_t read_le32(std::span<const std::uint8_t> data);
     static std::string ascii(std::span<const std::uint8_t> data);
     static std::vector<std::uint8_t> read_file(const std::string &path);
 

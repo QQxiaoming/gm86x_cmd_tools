@@ -202,12 +202,6 @@ std::uint8_t CommandGroup::userset_slot(const std::string &raw) {
     return static_cast<std::uint8_t>(value);
 }
 
-std::uint32_t CommandGroup::read_le32(std::span<const std::uint8_t> data) {
-    if (data.size() < 4)
-        throw std::runtime_error("short u32 payload");
-    return static_cast<std::uint32_t>(data[0] | data[1] << 8 | data[2] << 16 | data[3] << 24);
-}
-
 std::string CommandGroup::ascii(std::span<const std::uint8_t> data) {
     std::string result;
     for (const auto value : data) {
@@ -242,7 +236,7 @@ void CommandGroup::print_command(std::uint8_t sequence, std::uint8_t opcode,
     if ((opcode == GMSL_COMMAND_GIGE_CAM_READ_REGISTER
          || opcode == GMSL_COMMAND_GIGE_CAM_WRITE_REGISTER)
         && payload.size() >= 6) {
-        print_field("addr") << regaddr_label(read_le32(payload)) << '\n';
+        print_field("addr") << regaddr_label(read_le_u32(payload)) << '\n';
         const auto size = static_cast<unsigned>(payload[4] | payload[5] << 8);
         print_field("reg_size") << size << " bytes\n";
     }
@@ -350,7 +344,7 @@ Commands:
     de100-dump-registers [--module <regex>] [--start <addr32>] [--end <addr32>]
                          [--include-wo] [--list-only] [--fail-fast] [-o <csv_file>]
     de100-dump-match-debug-reg [probe_reg]
-    de100-get-statistics <sof_eof_num_base_addr> <err_num_base_addr>
+    de100-get-statistics [<sof_eof_num_base_addr> <err_num_base_addr>]
     de100-subsnr-read <1|2|left|right> <reg16>
     de100-subsnr-write <1|2|3|left|right|all> <reg16> <value16>
     isp-read <reg16>

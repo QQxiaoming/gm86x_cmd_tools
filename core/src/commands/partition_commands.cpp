@@ -38,9 +38,9 @@ void PartitionCommandGroup::print_isp_pending(const Response &response) const {
     print_section("isp-fw-update");
     print_field("status") << static_cast<unsigned>(status) << " (" << isp_update_status_name(status) << ")\n";
     print_field("pending") << static_cast<unsigned>(response.payload[1]) << '\n';
-    print_field("addr") << "0x" << hex(read_le32(std::span<const std::uint8_t>(response.payload).subspan(2)), 8)
+    print_field("addr") << "0x" << hex(read_le_u32(std::span<const std::uint8_t>(response.payload).subspan(2)), 8)
                         << '\n';
-    print_field("size") << read_le32(std::span<const std::uint8_t>(response.payload).subspan(6)) << '\n';
+    print_field("size") << read_le_u32(std::span<const std::uint8_t>(response.payload).subspan(6)) << '\n';
 }
 
 std::uint32_t PartitionCommandGroup::encode_update_offset(std::uint32_t offset) const {
@@ -60,7 +60,7 @@ void PartitionCommandGroup::print_register_value(std::uint32_t address, std::spa
     }
     if (data.size() != 4)
         return;
-    const auto raw = read_le32(data);
+    const auto raw = read_le_u32(data);
     if (kind == RegaddrKind::Integer) {
         std::int32_t int32_value;
         std::memcpy(&int32_value, &raw, sizeof(int32_value));
@@ -147,8 +147,8 @@ std::vector<PartitionCommandGroup::Entry> PartitionCommandGroup::parse_entries(c
     std::vector<Entry> entries;
     std::size_t offset = 0;
     while (offset + 8 <= blob.size()) {
-        const auto address = read_le32(std::span<const std::uint8_t>(blob).subspan(offset));
-        const auto length = read_le32(std::span<const std::uint8_t>(blob).subspan(offset + 4));
+        const auto address = read_le_u32(std::span<const std::uint8_t>(blob).subspan(offset));
+        const auto length = read_le_u32(std::span<const std::uint8_t>(blob).subspan(offset + 4));
         if (address == 0xffffffffU && length == 0xffffffffU)
             break;
         offset += 8;
@@ -477,8 +477,8 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
                 throw std::runtime_error("invalid ISP pending response");
             const auto status = state.payload[0];
             const auto pending = state.payload[1];
-            const auto offset = read_le32(std::span<const std::uint8_t>(state.payload).subspan(2));
-            const auto size = read_le32(std::span<const std::uint8_t>(state.payload).subspan(6));
+            const auto offset = read_le_u32(std::span<const std::uint8_t>(state.payload).subspan(2));
+            const auto size = read_le_u32(std::span<const std::uint8_t>(state.payload).subspan(6));
             print_section("poll " + std::to_string(poll), 2);
             print_field("status", 11, 4) << static_cast<unsigned>(status) << " (" << isp_update_status_name(status)
                                          << ")\n";

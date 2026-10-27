@@ -338,9 +338,20 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
         return true;
     }
     if (name == "de100-get-statistics") {
-        require_args(args, 2, name + " requires <sof_eof_num_base_addr> <err_num_base_addr>");
-        uint32_t sof_eof_num_base_addr = parse_u32(args[0]);
-        uint32_t err_num_base_addr = parse_u32(args[1]);
+        uint32_t sof_eof_num_base_addr = 0;
+        uint32_t err_num_base_addr = 0;
+        if (args.size() == 0) {
+            auto payload = std::vector<std::uint8_t>{0xc1};
+            auto response = execute(GMSL_COMMAND_PERCIPIO_DEBUG, payload, false, false);
+            if(response.status != 0)
+                throw std::runtime_error("Failed to get statistics");
+            sof_eof_num_base_addr = read_le_u32(response.payload, 0);
+            err_num_base_addr = read_le_u32(response.payload, 4);
+        } else {
+            require_args(args, 2, name + " requires <sof_eof_num_base_addr> <err_num_base_addr>");
+            sof_eof_num_base_addr = parse_u32(args[0]);
+            err_num_base_addr = parse_u32(args[1]);
+        }
         set_de100_page(sof_eof_num_base_addr, false);
         print_section("de100-get-statistics");
 
