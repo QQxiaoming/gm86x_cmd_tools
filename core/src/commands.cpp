@@ -114,12 +114,6 @@ const char *CommandGroup::opcode_name(std::uint8_t opcode) {
         return "APPLY_USERSET";
     case GMSL_COMMAND_LOW_POWER_MODE:
         return "LOW_POWER_MODE";
-    case GMSL_COMMAND_ISP_FW_UPDATE_REQUEST:
-        return "ISP_FW_UPDATE_REQUEST";
-    case GMSL_COMMAND_ISP_FW_UPDATE_GET_PENDING:
-        return "ISP_FW_UPDATE_GET_PENDING";
-    case GMSL_COMMAND_ISP_FW_UPDATE_SUBMIT_PENDING:
-        return "ISP_FW_UPDATE_SUBMIT_PENDING";
     case GMSL_COMMAND_ISP_GET_VERSION:
         return "ISP_GET_VERSION";
     case GMSL_COMMAND_ISP_READ_SUBSENSOR_REGISTER:
@@ -376,11 +370,6 @@ Commands:
     apply-userset <slot>
     low-power-mode [0|1]
     isp-get-version
-    isp-fw-update-request
-    isp-fw-update-get-pending
-    isp-fw-update-submit-pending <addr32> <size> <byte...>
-    isp-fw-update-submit-force-terminate
-    isp-fw-update-file <bin_file>
     gige-read <addr32|name> <size>
     gige-write <addr32|name> <size> <byte...>
     gige-get-access-map [start_index count]
