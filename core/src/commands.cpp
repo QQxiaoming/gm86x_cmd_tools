@@ -447,7 +447,8 @@ Notes:
 
 Examples:
     )" << exeName << R"( mcu-reset
-    )" << exeName << R"( get-fw-version
+    )" << exeName << R"( get-status
+    )" << exeName << R"( get-hw-info
     )" << exeName << R"( read-sn
     )" << exeName << R"( imu-read 1
     )" << exeName << R"( set-timestamp 1778837956645321
