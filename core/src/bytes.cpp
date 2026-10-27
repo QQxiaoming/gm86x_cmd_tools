@@ -2,18 +2,44 @@
 #include <algorithm>
 #include <charconv>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <cstring>
+#include <type_traits>
 
 namespace gm86x {
 
+static int integer_base(std::string &value) {
+    if (value.size() < 2 || value[0] != '0')
+        return 10;
+    switch (value[1]) {
+    case 'x':
+    case 'X':
+        value.erase(0, 2);
+        return 16;
+    case 'b':
+    case 'B':
+        value.erase(0, 2);
+        return 2;
+    case 'o':
+    case 'O':
+        value.erase(0, 2);
+        return 8;
+    case 'd':
+    case 'D':
+        value.erase(0, 2);
+        return 10;
+    default:
+        return 10;
+    }
+}
+
 static std::uint64_t parse_integer(const std::string &text, std::uint64_t max, const char *name) {
     std::string value = text;
-    if (value.starts_with("0x") || value.starts_with("0X"))
-        value = value.substr(2);
+    const auto base = integer_base(value);
     std::uint64_t result = 0;
-    const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), result, 16);
+    const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), result, base);
     if (value.empty() || error != std::errc{} || end != value.data() + value.size() || result > max)
         throw std::invalid_argument(std::string("invalid ") + name + ": " + text);
     return result;
@@ -35,45 +61,38 @@ std::uint64_t parse_u64(const std::string &text) {
     return parse_integer(text, 0xffffffffffffffffULL, "u64");
 }
 
+template <typename Signed>
+static Signed parse_signed_integer(const std::string &text, const char *name) {
+    using Unsigned = std::make_unsigned_t<Signed>;
+    const bool negative = !text.empty() && text[0] == '-';
+    const auto prefix_offset = !text.empty() && (text[0] == '-' || text[0] == '+') ? 1u : 0u;
+    const auto digits = text.substr(prefix_offset);
+    const auto max_magnitude = static_cast<std::uint64_t>(std::numeric_limits<Signed>::max()) +
+                               static_cast<std::uint64_t>(negative);
+    const auto magnitude = parse_integer(digits, max_magnitude, name);
+    if (!negative)
+        return static_cast<Signed>(static_cast<Unsigned>(magnitude));
+    if (magnitude == max_magnitude)
+        return std::numeric_limits<Signed>::min();
+    return static_cast<Signed>(-static_cast<Signed>(magnitude));
+}
+
+std::int32_t parse_i32(const std::string &text) {
+    return parse_signed_integer<std::int32_t>(text, "i32");
+}
+
 std::int64_t parse_i64(const std::string &text) {
-    std::int64_t value = 0;
-    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value, 10);
-    if (text.empty() || error != std::errc{} || end != text.data() + text.size())
-        throw std::invalid_argument("invalid i64: " + text);
-    return value;
+    return parse_signed_integer<std::int64_t>(text, "i64");
 }
 
 float parse_float(const std::string &text) {
     return std::stof(text);
 }
 
-std::uint32_t parse_decimal_or_hex_u32(const std::string &text) {
-    if (!text.empty() && text.find_first_not_of("0123456789") == std::string::npos) {
-        std::uint64_t value = 0;
-        const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value, 10);
-        if (error != std::errc{} || end != text.data() + text.size() || value > 0xffffffffULL)
-            throw std::invalid_argument("invalid u32: " + text);
-        return static_cast<std::uint32_t>(value);
-    }
-    return parse_u32(text);
-}
-
-std::int32_t parse_decimal_or_hex_i32(const std::string &text) {
-    if (!text.empty() && (text[0] == '-' || text.find_first_not_of("0123456789") == std::string::npos)) {
-        std::int64_t value = 0;
-        const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value, 10);
-        if (error != std::errc{} || end != text.data() + text.size() || value < -2147483648LL || value > 2147483647LL)
-            throw std::invalid_argument("invalid i32: " + text);
-        return static_cast<std::int32_t>(value);
-    }
-    return static_cast<std::int32_t>(parse_u32(text));
-}
-
 std::uint8_t parse_binary_value(const std::string &text, const std::string &command) {
-    if (text == "0")
-        return 0;
-    if (text == "1")
-        return 1;
+    const auto value = parse_byte(text);
+    if (value <= 1)
+        return value;
     throw std::invalid_argument(command + " requires <0|1>");
 }
 

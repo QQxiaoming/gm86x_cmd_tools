@@ -169,7 +169,7 @@ void CommandGroup::require_args(const std::vector<std::string> &args, std::size_
 }
 
 std::uint8_t CommandGroup::userset_slot(const std::string &raw) {
-    const auto value = parse_decimal_or_hex_u32(raw);
+    const auto value = parse_u32(raw);
     if (value > 128)
         throw std::invalid_argument("userset slot out of range: " + raw);
     return static_cast<std::uint8_t>(value);
@@ -382,7 +382,7 @@ Commands:
     percipio-debug-sleep-ms <ms>
 
 Notes:
-    - Byte and register arguments use hexadecimal by default.
+    - Integer arguments without a prefix use decimal; use 0x, 0b, 0o, or 0d to select a base.
     - GigE and read-*-addr addresses also accept regaddr_convert register names.
       Use the full name printed by regaddr_convert, for example:
       DepthCategory_RegAddr+StreamExposureTime_RegAddr.
@@ -396,7 +396,6 @@ Notes:
       Global connection options such as --bus, --addr, --seq, --retries, and --interval
       are specified before the command.
     - Userset slots for write/update/erase commands are 0..128.
-    - update-*-chunk offset32 is hexadecimal by default.
     - --buffer-updates 1 sets offset bit31; --buffer-updates 0 clears it.
     - Without --buffer-updates, file update commands use their default buffer mode.
     - --end-update sets offset bit30.

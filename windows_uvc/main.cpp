@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
             else if ((option == "-p" || option == "--pid") && index < argc)
                 product_id = gm86x::parse_u16(argv[index++]);
             else if ((option == "-n" || option == "--index") && index < argc)
-                device_index = gm86x::parse_decimal_or_hex_u32(argv[index++]);
+                device_index = gm86x::parse_u32(argv[index++]);
             else if (option == "-x" || option == "--debug")
                 debug = true;
             else if (option == "--buffer-updates") {
@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
             else if (option == "--seq" && index < argc)
                 sequence = gm86x::parse_byte(argv[index++]);
             else if ((option == "-r" || option == "--retries") && index < argc)
-                retries = gm86x::parse_decimal_or_hex_u32(argv[index++]);
+                retries = gm86x::parse_u32(argv[index++]);
             else if ((option == "-t" || option == "--interval") && index < argc) {
                 const auto seconds = std::stod(argv[index++]);
                 if (seconds < 0)

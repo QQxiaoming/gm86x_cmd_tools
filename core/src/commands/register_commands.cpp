@@ -300,7 +300,7 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
     if (name == "de100-dump-reg32") {
         require_args(args, 2, "de100-dump-reg32 requires <addr32> <count>");
         const auto address = parse_u32(args[0]);
-        const auto count = parse_decimal_or_hex_u32(args[1]);
+        const auto count = parse_u32(args[1]);
         if (count == 0 || count > 4096)
             throw std::invalid_argument("register count out of range (1..4096)");
         if (address % 4 != 0)

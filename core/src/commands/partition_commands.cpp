@@ -46,8 +46,7 @@ void PartitionCommandGroup::print_register_value(std::uint32_t address, std::spa
 }
 
 std::size_t PartitionCommandGroup::parse_chunk_size(const std::string &value) {
-    const auto parsed =
-        value.find_first_not_of("0123456789") == std::string::npos ? std::stoull(value, nullptr, 10) : parse_u16(value);
+    const auto parsed = parse_u32(value);
     if (parsed == 0 || parsed > 8188)
         throw std::invalid_argument("chunk_size out of range: " + value);
     return static_cast<std::size_t>(parsed);
@@ -109,7 +108,7 @@ void PartitionCommandGroup::update_file(std::uint8_t opcode, const std::string &
 }
 
 std::uint8_t PartitionCommandGroup::userset_read_slot(const std::string &raw) {
-    const auto value = parse_decimal_or_hex_u32(raw);
+    const auto value = parse_u32(raw);
     if (value > 128 && value != 255)
         throw std::invalid_argument("userset read slot out of range: " + raw);
     return static_cast<std::uint8_t>(value);
@@ -219,7 +218,7 @@ bool PartitionCommandGroup::try_run(std::string_view name_view, const std::vecto
         require_args(args, 3, "read-userset requires <slot> <offset> <size>");
         constexpr std::uint32_t userset_slot_size = 2048;
         const auto offset = parse_u32(args[1]);
-        const auto size = parse_decimal_or_hex_u32(args[2]);
+        const auto size = parse_u32(args[2]);
         if (offset >= userset_slot_size || size == 0 || size > 8192 || size > userset_slot_size - offset)
             throw std::invalid_argument("userset read range exceeds slot boundary");
         auto payload = std::vector<std::uint8_t>{userset_read_slot(args[0])};

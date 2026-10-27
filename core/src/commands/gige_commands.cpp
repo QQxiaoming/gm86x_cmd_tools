@@ -18,7 +18,7 @@ std::vector<std::uint8_t> GigeCommandGroup::gige_header(const std::string &addre
 }
 
 std::uint16_t GigeCommandGroup::parse_gige_size(const std::string &value) {
-    const auto size = parse_decimal_or_hex_u32(value);
+    const auto size = parse_u32(value);
     if (size == 0 || size > 640)
         throw std::invalid_argument("register size out of range (1..640): " + value);
     return static_cast<std::uint16_t>(size);
@@ -175,9 +175,9 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
         auto payload = gige_header(args[0], 4);
         std::vector<std::uint8_t> value;
         if (name == "gige-write-i32")
-            value = le32(static_cast<std::uint32_t>(parse_decimal_or_hex_i32(args[1])));
+            value = le32(static_cast<std::uint32_t>(parse_i32(args[1])));
         else if (name == "gige-write-u32")
-            value = le32(parse_decimal_or_hex_u32(args[1]));
+            value = le32(parse_u32(args[1]));
         else if (name == "gige-write-float") {
             const auto number = parse_float(args[1]);
             std::uint32_t bits;
@@ -228,7 +228,7 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
         }
         require_args(args, 2, "gige-get-access-map requires <start> <count>");
         const auto start_index = parse_u16(args[0]);
-        const auto count = parse_decimal_or_hex_u32(args[1]);
+        const auto count = parse_u32(args[1]);
         if (count == 0 || count > 45)
             throw std::invalid_argument("access-map count out of range (1..45): " + args[1]);
         auto payload = std::vector<std::uint8_t>{1};
@@ -278,7 +278,7 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
         }
         require_args(args, 2, "gige-get-long-ack-time-map requires <start> <count>");
         const auto start_index = parse_u16(args[0]);
-        const auto count = parse_decimal_or_hex_u32(args[1]);
+        const auto count = parse_u32(args[1]);
         if (count == 0 || count > 28)
             throw std::invalid_argument("long-ack-time-map count out of range (1..28): " + args[1]);
         auto payload = std::vector<std::uint8_t>{1};

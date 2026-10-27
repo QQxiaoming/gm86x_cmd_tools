@@ -189,7 +189,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
     }
     if (name == "raw-read") {
         require_args(args, 2, "raw-read requires <reg> <len>");
-        const auto length = parse_decimal_or_hex_u32(args[1]);
+        const auto length = parse_u32(args[1]);
         if (length == 0 || length > 0xffff)
             throw std::invalid_argument("raw-read length out of range");
         print_section("raw-read");
@@ -214,7 +214,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
     }
     if (name == "ping-random") {
         require_args(args, 1, name + " requires <size>");
-        const auto size = parse_decimal_or_hex_u32(args[0]);
+        const auto size = parse_u32(args[0]);
         auto payload = std::vector<std::uint8_t>(size);
         for (auto& byte : payload) {
             byte = static_cast<std::uint8_t>(rand() % 256);
@@ -260,7 +260,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
     }
     if (name == "set-timestamp") {
         require_args(args, 1, "set-timestamp requires <u64_dec>");
-        execute(GMSL_COMMAND_SET_TIMESTAMP, le64(std::stoull(args[0])));
+        execute(GMSL_COMMAND_SET_TIMESTAMP, le64(parse_u64(args[0])));
         return true;
     }
     if (name == "time-sync-exchange") {
@@ -284,7 +284,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
     }
     if (name == "smooth-set-timestamp") {
         require_args(args, 1, "smooth-set-timestamp requires <timestamp_u64>");
-        execute(GMSL_COMMAND_SMOOTH_ADJUST_TIMESTAMP, le64(std::stoull(args[0])));
+        execute(GMSL_COMMAND_SMOOTH_ADJUST_TIMESTAMP, le64(parse_u64(args[0])));
         return true;
     }
     if (name == "get-fw-version") {
@@ -301,7 +301,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
     if (name == "imu-read") {
         require_args(args, 1, name + " requires an argument");
         std::uint8_t channel = 0;
-        const auto sample_count_value = parse_decimal_or_hex_u32(args[0]);
+        const auto sample_count_value = parse_u32(args[0]);
         if (sample_count_value > 255)
             throw std::invalid_argument("imu sample count out of range");
         channel = static_cast<std::uint8_t>(sample_count_value);
@@ -440,7 +440,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
     }
     if (name == "percipio-debug-sleep-ms") {
         require_args(args, 1, "percipio-debug-sleep-ms requires <ms>");
-        const auto ms = parse_decimal_or_hex_u32(args[0]);
+        const auto ms = parse_u32(args[0]);
         auto payload = std::vector<std::uint8_t>{0x03};
         append_to(payload, le32(ms));
         execute(GMSL_COMMAND_PERCIPIO_DEBUG, payload);

@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
             else if ((option == "-a" || option == "--addr") && index < argc)
                 address = gm86x::parse_byte(argv[index++]);
             else if ((option == "-r" || option == "--retries") && index < argc)
-                retries = gm86x::parse_decimal_or_hex_u32(argv[index++]);
+                retries = gm86x::parse_u32(argv[index++]);
             else if ((option == "-i" || option == "--interval") && index < argc) {
                 const auto seconds = std::stod(argv[index++]);
                 if (seconds < 0)

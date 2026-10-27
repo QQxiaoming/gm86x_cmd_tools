@@ -5,7 +5,7 @@
 
 namespace gm86x {
 
-// Parses a hexadecimal address or resolves a name using regaddr_convert's
+// Parses an integer address or resolves a name using regaddr_convert's
 // built-in GMSL database. Unknown or ambiguous names throw invalid_argument.
 std::uint32_t parse_regaddr(const std::string &text);
 
