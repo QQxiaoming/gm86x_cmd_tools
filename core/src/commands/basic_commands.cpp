@@ -23,13 +23,6 @@ void BasicCommandGroup::print_probe(const std::vector<std::uint8_t> &data) const
     print_field("payload_fifo_size", 17) << read_le_u16(data, 4) << '\n';
 }
 
-std::string BasicCommandGroup::ascii_field(std::span<const std::uint8_t> data, std::size_t offset, std::size_t length) const {
-    std::string value;
-    for (std::size_t index = offset; index < offset + length && index < data.size() && data[index]; ++index)
-        value += data[index] >= 32 && data[index] <= 126 ? static_cast<char>(data[index]) : '.';
-    return value;
-}
-
 void BasicCommandGroup::print_imu_samples(const std::vector<std::uint8_t> &payload) const {
     if (payload.empty())
         return;
@@ -77,14 +70,10 @@ void BasicCommandGroup::print_status(const std::vector<std::uint8_t> &payload) c
     const auto u32 = [&data](std::size_t offset) {
         if (offset + 4 > data.size())
             throw std::runtime_error("short u32 status field");
-        return static_cast<std::uint32_t>(data[offset] | data[offset + 1] << 8 | data[offset + 2] << 16 |
-                                          data[offset + 3] << 24);
+        return read_le_u32(data, offset);
     };
     const auto u64 = [&data](std::size_t offset) {
-        std::uint64_t value = 0;
-        for (std::size_t index = 0; index < 8; ++index)
-            value |= static_cast<std::uint64_t>(data[offset + index]) << (index * 8);
-        return value;
+        return read_le_u64(data, offset);
     };
 
     constexpr int width = 17;
@@ -121,7 +110,7 @@ void BasicCommandGroup::print_status(const std::vector<std::uint8_t> &payload) c
     print_field("drv_ready", width, indent) << "0x" << hex(data[37], 2) << '\n';
     print_field("last", width, indent) << "0x" << hex(data[38], 2) << " (" << status_name(data[38]) << ")\n";
     print_field("model", width, indent) << isp_model_name(data[39]) << '\n';
-    print_field("name", width, indent) << ascii_field(data, 40, 16) << '\n';
+    print_field("name", width, indent) << ascii(data, 40, 16) << '\n';
 
     print_section("imu", 2);
     print_field("irq", width, indent) << "0x" << hex(data[64], 2) << '\n';
@@ -170,14 +159,6 @@ std::uint8_t BasicCommandGroup::temperature_channel(const std::string &value) co
     if (value == "3" || value == "laser2")
         return 7;
     throw std::invalid_argument("invalid temperature channel: " + value);
-}
-
-std::uint8_t BasicCommandGroup::binary_value(const std::string &value, const std::string &command) const {
-    if (value == "0")
-        return 0;
-    if (value == "1")
-        return 1;
-    throw std::invalid_argument(command + " requires <0|1>");
 }
 
 std::uint8_t BasicCommandGroup::pps_mode(const std::string &value) const {
@@ -256,13 +237,13 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
     if (name == "set-reset") {
         std::uint8_t value = 1;
         require_args(args, 1, name + " requires <0|1>");
-        value = binary_value(args[0], name);
+        value = parse_binary_value(args[0], name);
         execute(GMSL_COMMAND_SET_TIMER_OUT_RESET, {value});
         return true;
     }
     if (name == "set-pps-mode") {
         require_args(args, 1, "set-pps-mode requires <enable>");
-        auto payload = std::vector<std::uint8_t>{static_cast<std::uint8_t>(binary_value(args[0], name))};
+        auto payload = std::vector<std::uint8_t>{parse_binary_value(args[0], name)};
         execute(GMSL_COMMAND_SET_PPS_MODE, payload);
         return true;
     }
@@ -313,7 +294,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
             return true;
         if (!response.payload.empty()) {
             print_section("get-fw-version");
-            print_field("version") << ascii_field(response.payload, 0, response.payload.size()) << '\n';
+            print_field("version") << ascii(response.payload) << '\n';
         }
         return true;
     }
@@ -369,7 +350,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
         std::uint8_t value = 1;
         if (!args.empty()) {
             require_args(args, 1, name + " requires <0|1>");
-            value = binary_value(args[0], name);
+            value = parse_binary_value(args[0], name);
         }
         execute(GMSL_COMMAND_LOW_POWER_MODE, {value});
         return true;
@@ -381,7 +362,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
             return true;
         if (!response.payload.empty()) {
             print_section("isp-get-version");
-            print_field("version") << ascii_field(response.payload, 0, response.payload.size()) << '\n';
+            print_field("version") << ascii(response.payload) << '\n';
         }
         return true;
     }
@@ -467,7 +448,7 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
     }
     if (name == "percipio-debug-status-log") {
         require_args(args, 1, "percipio-debug-status-log requires <0|1>");
-        execute(GMSL_COMMAND_PERCIPIO_DEBUG, {0xc0, binary_value(args[0], name)});
+        execute(GMSL_COMMAND_PERCIPIO_DEBUG, {0xc0, parse_binary_value(args[0], name)});
         return true;
     }
     return false;

@@ -1,4 +1,5 @@
 #include "bytes.hpp"
+#include <algorithm>
 #include <charconv>
 #include <iomanip>
 #include <sstream>
@@ -68,10 +69,56 @@ std::int32_t parse_decimal_or_hex_i32(const std::string &text) {
     return static_cast<std::int32_t>(parse_u32(text));
 }
 
+std::uint8_t parse_binary_value(const std::string &text, const std::string &command) {
+    if (text == "0")
+        return 0;
+    if (text == "1")
+        return 1;
+    throw std::invalid_argument(command + " requires <0|1>");
+}
+
 std::vector<std::uint8_t> parse_byte_list(std::span<const std::string> values) {
     std::vector<std::uint8_t> result;
     for (const auto &value : values)
         result.push_back(parse_byte(value));
+    return result;
+}
+
+std::vector<std::uint8_t> le16(std::uint16_t value) {
+    std::vector<std::uint8_t> result;
+    append_le_u16(result, value);
+    return result;
+}
+
+std::vector<std::uint8_t> le32(std::uint32_t value) {
+    std::vector<std::uint8_t> result;
+    append_le_u32(result, value);
+    return result;
+}
+
+std::vector<std::uint8_t> le64(std::uint64_t value) {
+    std::vector<std::uint8_t> result;
+    append_le_u64(result, value);
+    return result;
+}
+
+void append_to(std::vector<std::uint8_t> &target, std::span<const std::uint8_t> source) {
+    target.insert(target.end(), source.begin(), source.end());
+}
+
+std::string ascii(std::span<const std::uint8_t> data) {
+    return ascii(data, 0, data.size());
+}
+
+std::string ascii(std::span<const std::uint8_t> data, std::size_t offset, std::size_t length) {
+    std::string result;
+    if (offset >= data.size())
+        return result;
+    const auto end = offset + std::min(length, data.size() - offset);
+    for (std::size_t index = offset; index < end && data[index]; ++index) {
+        const auto value = data[index];
+        result += value >= 32 && value <= 126 ? static_cast<char>(value) : '.';
+    }
     return result;
 }
 
@@ -118,6 +165,11 @@ void append_le_u16(std::vector<std::uint8_t> &data, std::uint16_t value) {
 
 void append_le_u32(std::vector<std::uint8_t> &data, std::uint32_t value) {
     for (int shift = 0; shift < 32; shift += 8)
+        data.push_back(static_cast<std::uint8_t>(value >> shift));
+}
+
+void append_le_u64(std::vector<std::uint8_t> &data, std::uint64_t value) {
+    for (int shift = 0; shift < 64; shift += 8)
         data.push_back(static_cast<std::uint8_t>(value >> shift));
 }
 

@@ -161,14 +161,6 @@ void write_csv_row(std::ostream &output, const std::vector<std::string> &fields)
 
 } // namespace
 
-std::uint8_t RegisterCommandGroup::binary_value(const std::string &value, const std::string &command) {
-    if (value == "0")
-        return 0;
-    if (value == "1")
-        return 1;
-    throw std::invalid_argument(command + " requires <0|1>");
-}
-
 std::uint8_t RegisterCommandGroup::subsnr_channel(const std::string &value, bool allow_all) {
     if (value == "1" || value == "left")
         return 1;

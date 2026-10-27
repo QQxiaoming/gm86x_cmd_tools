@@ -94,12 +94,7 @@ protected:
     void print_transfer_progress(std::size_t completed, std::size_t total,
                                  std::chrono::steady_clock::time_point started) const;
     static void require_args(const std::vector<std::string> &args, std::size_t count, const std::string &usage);
-    static std::vector<std::uint8_t> le16(std::uint16_t value);
-    static std::vector<std::uint8_t> le32(std::uint32_t value);
-    static std::vector<std::uint8_t> le64(std::uint64_t value);
-    static void append_to(std::vector<std::uint8_t> &target, std::span<const std::uint8_t> source);
     static std::uint8_t userset_slot(const std::string &raw);
-    static std::string ascii(std::span<const std::uint8_t> data);
     static std::vector<std::uint8_t> read_file(const std::string &path);
 
     CommandContext &context_;

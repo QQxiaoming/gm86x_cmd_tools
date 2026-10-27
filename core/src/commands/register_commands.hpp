@@ -15,7 +15,6 @@ public:
 	static bool try_run_offline(std::string_view name, const std::vector<std::string> &args);
 
 private:
-	static std::uint8_t binary_value(const std::string &value, const std::string &command);
 	static std::uint8_t subsnr_channel(const std::string &value, bool allow_all);
 	void set_de100_page(std::uint32_t address, bool verbose = true);
 	std::uint8_t read_de100_byte(std::uint16_t address);

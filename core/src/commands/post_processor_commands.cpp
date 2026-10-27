@@ -578,18 +578,10 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
         if (args[0] == "fpga-reg-read"){
             require_args(args, 2, "post-processor-cmd fpga-reg-read requires <register_address>");
             const auto register_address = parse_u32(args[1]);
-            const auto response = execute_command(0x1b, {static_cast<std::uint8_t>(register_address & 0xFF),
-                                                          static_cast<std::uint8_t>((register_address >> 8) & 0xFF),
-                                                          static_cast<std::uint8_t>((register_address >> 16) & 0xFF),
-                                                          static_cast<std::uint8_t>((register_address >> 24) & 0xFF)});
-            uint32_t value = 0;
-            if (response.payload.size() >= 4) {
-                value = static_cast<uint32_t>(response.payload[0]) |
-                        (static_cast<uint32_t>(response.payload[1]) << 8) |
-                        (static_cast<uint32_t>(response.payload[2]) << 16) |
-                        (static_cast<uint32_t>(response.payload[3]) << 24);
-            }
+            const auto response = execute_command(0x1b, le32(register_address));
             print_command_response("fpga-reg-read", response);
+            require_payload_size(response.payload, 4, "fpga-reg-read");
+            const auto value = read_le_u32(response.payload);
             print_field("value") << "0x" << hex(value, 8) << '\n';
             return true;
         }
@@ -597,14 +589,9 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
             require_args(args, 3, "post-processor-cmd fpga-reg-write requires <register_address> <value>");
             const auto register_address = parse_u32(args[1]);
             const auto value = parse_u32(args[2]);
-            const auto response = execute_command(0x1c, {static_cast<std::uint8_t>(register_address & 0xFF),
-                                                          static_cast<std::uint8_t>((register_address >> 8) & 0xFF),
-                                                          static_cast<std::uint8_t>((register_address >> 16) & 0xFF),
-                                                          static_cast<std::uint8_t>((register_address >> 24) & 0xFF),
-                                                          static_cast<std::uint8_t>(value & 0xFF),
-                                                          static_cast<std::uint8_t>((value >> 8) & 0xFF),
-                                                          static_cast<std::uint8_t>((value >> 16) & 0xFF),
-                                                          static_cast<std::uint8_t>((value >> 24) & 0xFF)});
+            auto payload = le32(register_address);
+            append_to(payload, le32(value));
+            const auto response = execute_command(0x1c, std::move(payload));
             print_command_response("fpga-reg-write", response);
             return true;
         }
@@ -612,17 +599,16 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
             require_args(args, 3, "post-processor-cmd fpga-reg-bulk-read requires <start_register_address> <num_registers>");
             const auto start_register_address = parse_u32(args[1]);
             const auto num_registers = parse_byte(args[2]);
-            const auto response = execute_command(0x1d, { num_registers,
-                                                          static_cast<std::uint8_t>(start_register_address & 0xFF),
-                                                          static_cast<std::uint8_t>((start_register_address >> 8) & 0xFF),
-                                                          static_cast<std::uint8_t>((start_register_address >> 16) & 0xFF),
-                                                          static_cast<std::uint8_t>((start_register_address >> 24) & 0xFF)});
+            std::vector<std::uint8_t> payload{num_registers};
+            append_to(payload, le32(start_register_address));
+            const auto response = execute_command(0x1d, std::move(payload));
             print_command_response("fpga-reg-bulk-read", response);
-            if (response.payload.size() >= num_registers) {
-                for (std::size_t i = 0; i < num_registers*4; i+=4) {
-                    uint32_t value = response.payload[i] | (response.payload[i + 1] << 8) | (response.payload[i + 2] << 16) | (response.payload[i + 3] << 24);
-                    print_field("reg[" + std::to_string(i) + "]") << "0x" << hex(value, 8) << '\n';
-                }
+            const auto expected_size = static_cast<std::size_t>(num_registers) * 4;
+            if (response.payload.size() < expected_size)
+                throw std::runtime_error("fpga-reg-bulk-read response payload is too short");
+            for (std::size_t i = 0; i < expected_size; i += 4) {
+                const auto value = read_le_u32(response.payload, i);
+                print_field("reg[" + std::to_string(i) + "]") << "0x" << hex(value, 8) << '\n';
             }
             return true;
         }
@@ -631,21 +617,14 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
             const auto start_register_address = parse_u32(args[1]);
             const auto num_registers = parse_byte(args[2]);
             std::vector<std::uint32_t> values;
-            for (std::size_t i = 0; i < num_registers; ++i) {
+            for (std::size_t i = 0; i < static_cast<std::size_t>(num_registers); ++i) {
                 values.push_back(parse_u32(args[3 + i]));
             }
             std::vector<std::uint8_t> payload;
             payload.push_back(num_registers);
-            payload.push_back(static_cast<std::uint8_t>(start_register_address & 0xFF));
-            payload.push_back(static_cast<std::uint8_t>((start_register_address >> 8) & 0xFF));
-            payload.push_back(static_cast<std::uint8_t>((start_register_address >> 16) & 0xFF));
-            payload.push_back(static_cast<std::uint8_t>((start_register_address >> 24) & 0xFF));
-            for (const auto value : values) {
-                payload.push_back(static_cast<std::uint8_t>(value & 0xFF));
-                payload.push_back(static_cast<std::uint8_t>((value >> 8) & 0xFF));
-                payload.push_back(static_cast<std::uint8_t>((value >> 16) & 0xFF));
-                payload.push_back(static_cast<std::uint8_t>((value >> 24) & 0xFF));
-            }
+            append_to(payload, le32(start_register_address));
+            for (const auto value : values)
+                append_to(payload, le32(value));
             const auto response = execute_command(0x1e, payload);
             print_command_response("fpga-reg-bulk-write", response);
             return true;

@@ -26,7 +26,7 @@ std::uint16_t GigeCommandGroup::parse_gige_size(const std::string &value) {
 
 void GigeCommandGroup::print_access_map_count(const Response &response) {
     if (response.status == 0 && response.payload.size() == 2) {
-        const auto count = static_cast<unsigned>(response.payload[0] | response.payload[1] << 8);
+        const auto count = static_cast<unsigned>(read_le_u16(response.payload));
         print_section("access-map");
         print_field("entry_count") << count << " (0x" << hex(count, 4) << ")\n";
     }
@@ -86,7 +86,7 @@ void GigeCommandGroup::print_long_ack_time_map_count(const Response &response) {
         return;
     if (response.payload.size() != 2)
         throw std::runtime_error("long-ack-time-map count payload length is not 2");
-    const auto count = static_cast<unsigned>(response.payload[0] | response.payload[1] << 8);
+    const auto count = static_cast<unsigned>(read_le_u16(response.payload));
     print_section("long-ack-time-map");
     print_field("entry_count") << count << " (0x" << hex(count, 4) << ")\n";
 }
@@ -121,10 +121,8 @@ void GigeCommandGroup::print_long_ack_time_map_page(std::size_t start_index, con
     for (std::size_t index = 0; index < entries; ++index) {
         const auto offset = index * 8;
         const auto address = read_le_u32(std::span<const std::uint8_t>(response.payload).subspan(offset));
-        const auto read_timeout = static_cast<unsigned>(response.payload[offset + 4] |
-                                                       response.payload[offset + 5] << 8);
-        const auto write_timeout = static_cast<unsigned>(response.payload[offset + 6] |
-                                                        response.payload[offset + 7] << 8);
+        const auto read_timeout = static_cast<unsigned>(read_le_u16(response.payload, offset + 4));
+        const auto write_timeout = static_cast<unsigned>(read_le_u16(response.payload, offset + 6));
         auto &output = print_field("[" + std::to_string(start_index + index) + "]", 11, 4);
         output << std::left << std::setw(static_cast<int>(addressColumnWidth))
                << ("addr=" + regaddr_label(address)) << std::right
@@ -194,7 +192,7 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
         if (args.empty()) {
             auto response = execute(GMSL_COMMAND_GIGE_CAM_GET_ACCESS_MAP, {0}, false, false);
             if (response.status == 0 && response.payload.size() == 2) {
-                const auto count = static_cast<unsigned>(response.payload[0] | response.payload[1] << 8);
+                const auto count = static_cast<unsigned>(read_le_u16(response.payload));
                 if(context_.max_response_payload_size <= (count*5+50)) {
                     // 分页获取整个访问映射表
                     std::uint16_t start_index = 0;
@@ -249,7 +247,7 @@ bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std
             const auto response = execute(GMSL_COMMAND_GIGE_CAM_GET_LONG_ACK_TIME_MAP, {0}, false, false);
             if (response.status != 0 || response.payload.size() != 2)
                 throw std::runtime_error("Failed to get long ack time map count");
-            const auto count = static_cast<unsigned>(response.payload[0] | response.payload[1] << 8);
+            const auto count = static_cast<unsigned>(read_le_u16(response.payload));
             if (context_.max_response_payload_size <= count * 8 + 50) {
                 print_section("long-ack-time-map-page");
                 print_field("start_index") << 0 << '\n';

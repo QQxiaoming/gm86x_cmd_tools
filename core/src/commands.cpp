@@ -168,42 +168,11 @@ void CommandGroup::require_args(const std::vector<std::string> &args, std::size_
         throw std::invalid_argument(usage);
 }
 
-std::vector<std::uint8_t> CommandGroup::le16(std::uint16_t value) {
-    return {static_cast<std::uint8_t>(value), static_cast<std::uint8_t>(value >> 8)};
-}
-
-std::vector<std::uint8_t> CommandGroup::le32(std::uint32_t value) {
-    std::vector<std::uint8_t> result;
-    append_le_u32(result, value);
-    return result;
-}
-
-std::vector<std::uint8_t> CommandGroup::le64(std::uint64_t value) {
-    std::vector<std::uint8_t> result;
-    for (int shift = 0; shift < 64; shift += 8)
-        result.push_back(static_cast<std::uint8_t>(value >> shift));
-    return result;
-}
-
-void CommandGroup::append_to(std::vector<std::uint8_t> &target, std::span<const std::uint8_t> source) {
-    target.insert(target.end(), source.begin(), source.end());
-}
-
 std::uint8_t CommandGroup::userset_slot(const std::string &raw) {
     const auto value = parse_decimal_or_hex_u32(raw);
     if (value > 128)
         throw std::invalid_argument("userset slot out of range: " + raw);
     return static_cast<std::uint8_t>(value);
-}
-
-std::string CommandGroup::ascii(std::span<const std::uint8_t> data) {
-    std::string result;
-    for (const auto value : data) {
-        if (!value)
-            break;
-        result += value >= 32 && value <= 126 ? static_cast<char>(value) : '.';
-    }
-    return result;
 }
 
 std::vector<std::uint8_t> CommandGroup::read_file(const std::string &path) {
@@ -231,7 +200,7 @@ void CommandGroup::print_command(std::uint8_t sequence, std::uint8_t opcode,
          || opcode == GMSL_COMMAND_GIGE_CAM_WRITE_REGISTER)
         && payload.size() >= 6) {
         print_field("addr") << regaddr_label(read_le_u32(payload)) << '\n';
-        const auto size = static_cast<unsigned>(payload[4] | payload[5] << 8);
+        const auto size = static_cast<unsigned>(read_le_u16(payload, 4));
         print_field("reg_size") << size << " bytes\n";
     }
     print_hex_dump(payload);
