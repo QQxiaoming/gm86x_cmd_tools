@@ -380,6 +380,7 @@ Commands:
     percipio-debug-write32 <addr32> <value32>
     percipio-debug-status-log <0|1>
     percipio-debug-sleep-ms <ms>
+    percipio-debug-run-bin <bin_file> [chunk_size]
 
 Notes:
     - Integer arguments without a prefix use decimal; use 0x, 0b, 0o, or 0d to select a base.
@@ -401,6 +402,7 @@ Notes:
     - --end-update sets offset bit30.
     - update-boot-chunk requires a little-endian password32 argument.
     - Default chunk sizes are sys/cfg/calib/userdata=8188, boot=8184, userset=8187.
+    - percipio-debug-run-bin uploads a raw RV32 plugin, executes it, and prints its u32 result.
 
 Examples:
     )" << exeName << R"( mcu-reset
