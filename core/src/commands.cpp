@@ -206,7 +206,10 @@ void CommandGroup::print_command(std::uint8_t sequence, std::uint8_t opcode,
         const auto size = static_cast<unsigned>(read_le_u16(payload, 4));
         print_field("reg_size") << size << " bytes\n";
     }
-    print_hex_dump(payload);
+    if (opcode == GMSL_COMMAND_PERCIPIO_DEBUG && !payload.empty() && payload[0] == 0xfe)
+        print_field("data") << "<redacted>\n";
+    else
+        print_hex_dump(payload);
 }
 
 void CommandGroup::print_response(const Response &response) const {
@@ -379,6 +382,8 @@ Commands:
     update-userset-file <slot> <bin_file> [start_offset32] [chunk_size]
     update-userdata-file <bin_file> [start_offset32] [chunk_size]
     percipio-debug <op> [payload_byte...]
+    percipio-debug-unlock <password32>
+    percipio-debug-lock
     percipio-debug-read32 <addr32>
     percipio-debug-write32 <addr32> <value32>
     percipio-debug-status-log <0|1>
@@ -409,6 +414,10 @@ Notes:
     - percipio-debug-run-bin uses the buffer-based plugin ABI (old plugins must be rebuilt).
       Parameters are raw bytes; default result capacity is the transport limit minus 4.
       Non-zero plugin status exits non-zero; --out saves result bytes, excluding status.
+    - All percipio-debug operations and de100-get-statistics without explicit addresses
+      require percipio-debug-unlock first. Unlock persists across tool invocations
+      until MCU reset, percipio-debug-lock, or a failed unlock request.
+      The password32 is sent in plaintext; it does not prevent interception or replay.
 
 Examples:
     )" << exeName << R"( mcu-reset

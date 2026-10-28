@@ -501,6 +501,18 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
         print_field("ErrCode", 15) << "0x" << std::hex << errcode << std::dec << '\n';
         return true;
     }
+    if (name == "percipio-debug-unlock" || name == "percipio-debug-lock") {
+        const bool unlock = name == "percipio-debug-unlock";
+        require_args(args, unlock ? 1U : 0U,
+                     unlock ? "percipio-debug-unlock requires <password32>"
+                            : "percipio-debug-lock takes no arguments");
+        auto payload = std::vector<std::uint8_t>{0xff};
+        if (unlock)
+            append_to(payload, le32(parse_u32(args[0])));
+        const auto response = execute(GMSL_COMMAND_PERCIPIO_DEBUG, payload, true, false);
+        print_response(response);
+        return true;
+    }
     if (name == "percipio-debug") {
         if (args.empty())
             throw std::invalid_argument("percipio-debug requires <op>");
