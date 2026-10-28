@@ -2,10 +2,13 @@
 
 #include "bytes.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <chrono>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <thread>
 
@@ -179,7 +182,9 @@ std::uint8_t BasicCommandGroup::pps_period(const std::string &value) const {
     throw std::invalid_argument("invalid PPS period: " + value);
 }
 
-void BasicCommandGroup::run_bin(const std::string &path, std::size_t chunk_size) {
+void BasicCommandGroup::run_bin(const std::string &path, std::size_t chunk_size,
+                               const std::vector<std::uint8_t> &parameters,
+                               std::size_t result_capacity, const std::string &output_path) {
     const auto code = read_file(path);
     if (code.empty())
         throw std::invalid_argument("plugin binary cannot be empty");
@@ -191,6 +196,11 @@ void BasicCommandGroup::run_bin(const std::string &path, std::size_t chunk_size)
     const auto transfer_limit = std::min(context_.max_control_transfer_size, max_i2c_payload_size);
     if (transfer_limit <= d1_payload_overhead)
         throw std::invalid_argument("control transfer limit is too small for plugin upload");
+    if (parameters.size() > transfer_limit - 3U)
+        throw std::invalid_argument("plugin parameters exceed transport payload limit");
+    const auto response_limit = std::min<std::size_t>(8192U, context_.max_response_payload_size);
+    if (response_limit < 4U || result_capacity > response_limit - 4U)
+        throw std::invalid_argument("plugin result capacity exceeds transport payload limit");
 
     const auto max_chunk_size = transfer_limit - d1_payload_overhead;
     if (chunk_size > max_chunk_size)
@@ -227,12 +237,32 @@ void BasicCommandGroup::run_bin(const std::string &path, std::size_t chunk_size)
         print_transfer_progress(offset + count, code.size(), started);
     }
 
-    const auto response = execute(GMSL_COMMAND_PERCIPIO_DEBUG, {0xd2}, false, false);
-    if (response.payload.size() != sizeof(std::uint32_t))
+    std::vector<std::uint8_t> run_payload{0xd2};
+    append_to(run_payload, le16(static_cast<std::uint16_t>(result_capacity)));
+    append_to(run_payload, parameters);
+    const auto response = execute(GMSL_COMMAND_PERCIPIO_DEBUG, run_payload, false, false);
+    if (response.payload.size() < sizeof(std::uint32_t) ||
+        response.payload.size() - sizeof(std::uint32_t) > result_capacity)
         throw std::runtime_error("plugin execution returned an invalid result payload");
 
+    const auto plugin_status = read_le_u32(response.payload);
+    const auto result = std::span<const std::uint8_t>(response.payload).subspan(4U);
     print_section("plugin-result");
-    print_field("value") << "0x" << hex(read_le_u32(response.payload), 8) << '\n';
+    print_field("status") << "0x" << hex(plugin_status, 8) << '\n';
+    print_field("size") << result.size() << " bytes\n";
+    print_hex_dump(result);
+    if (!output_path.empty()) {
+        std::ofstream output(output_path, std::ios::binary | std::ios::trunc);
+        if (!output)
+            throw std::runtime_error("cannot open result file: " + output_path);
+        output.write(reinterpret_cast<const char *>(result.data()),
+                     static_cast<std::streamsize>(result.size()));
+        output.close();
+        if (!output)
+            throw std::runtime_error("cannot write result file: " + output_path);
+    }
+    if (plugin_status != 0U)
+        throw std::runtime_error("plugin returned non-zero status: 0x" + hex(plugin_status, 8));
 }
 
 bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<std::string> &args) {
@@ -508,10 +538,34 @@ bool BasicCommandGroup::try_run(std::string_view name_view, const std::vector<st
         return true;
     }
     if (name == "percipio-debug-run-bin") {
-        if (args.empty() || args.size() > 2U)
-            throw std::invalid_argument("percipio-debug-run-bin requires <bin_file> [chunk_size]");
-        const auto chunk_size = args.size() == 2U ? parse_u32(args[1]) : 0U;
-        run_bin(args[0], chunk_size);
+        if (args.empty())
+            throw std::invalid_argument("percipio-debug-run-bin requires <bin_file> [chunk_size] [options]");
+        std::size_t index = 1U;
+        std::size_t chunk_size = 0U;
+        if (index < args.size() && !args[index].starts_with("--")) {
+            chunk_size = parse_u32(args[index++]);
+            if (chunk_size == 0U)
+                throw std::invalid_argument("plugin chunk_size must be greater than zero");
+        }
+        std::vector<std::uint8_t> parameters;
+        const auto response_limit = std::min<std::size_t>(8192U, context_.max_response_payload_size);
+        std::size_t result_capacity = response_limit >= 4U ? response_limit - 4U : 0U;
+        std::string output_path;
+        while (index < args.size()) {
+            const auto option = args[index++];
+            if (index == args.size())
+                throw std::invalid_argument("missing value for " + option);
+            const auto &value = args[index++];
+            if (option == "--args-file")
+                parameters = read_file(value);
+            else if (option == "--result-size")
+                result_capacity = parse_u32(value);
+            else if (option == "--out")
+                output_path = value;
+            else
+                throw std::invalid_argument("unknown plugin option: " + option);
+        }
+        run_bin(args[0], chunk_size, parameters, result_capacity, output_path);
         return true;
     }
     return false;

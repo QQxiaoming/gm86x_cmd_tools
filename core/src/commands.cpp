@@ -179,7 +179,10 @@ std::vector<std::uint8_t> CommandGroup::read_file(const std::string &path) {
     std::ifstream input(path, std::ios::binary);
     if (!input)
         throw std::runtime_error("cannot open file: " + path);
-    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    std::vector<std::uint8_t> data{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    if (input.bad())
+        throw std::runtime_error("cannot read file: " + path);
+    return data;
 }
 
 void CommandGroup::print_timing(const RequestTiming &timing) const {
@@ -381,6 +384,7 @@ Commands:
     percipio-debug-status-log <0|1>
     percipio-debug-sleep-ms <ms>
     percipio-debug-run-bin <bin_file> [chunk_size]
+                           [--args-file <file>] [--result-size <bytes>] [--out <file>]
 
 Notes:
     - Integer arguments without a prefix use decimal; use 0x, 0b, 0o, or 0d to select a base.
@@ -402,7 +406,9 @@ Notes:
     - --end-update sets offset bit30.
     - update-boot-chunk requires a little-endian password32 argument.
     - Default chunk sizes are sys/cfg/calib/userdata=8188, boot=8184, userset=8187.
-    - percipio-debug-run-bin uploads a raw RV32 plugin, executes it, and prints its u32 result.
+    - percipio-debug-run-bin uses the buffer-based plugin ABI (old plugins must be rebuilt).
+      Parameters are raw bytes; default result capacity is the transport limit minus 4.
+      Non-zero plugin status exits non-zero; --out saves result bytes, excluding status.
 
 Examples:
     )" << exeName << R"( mcu-reset

@@ -22,7 +22,9 @@ private:
 	void print_status(const std::vector<std::uint8_t> &payload) const;
 	void print_probe(const std::vector<std::uint8_t> &data) const;
 	void print_imu_samples(const std::vector<std::uint8_t> &payload) const;
-    void run_bin(const std::string &path, std::size_t chunk_size);
+    void run_bin(const std::string &path, std::size_t chunk_size,
+                 const std::vector<std::uint8_t> &parameters, std::size_t result_capacity,
+                 const std::string &output_path);
 };
 
 }
