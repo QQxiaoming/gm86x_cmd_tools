@@ -66,12 +66,10 @@ void GigeCommandGroup::get_xml(const std::string &path) {
     const auto size = parse_u32("0x" + url.substr(size_separator + 1));
     if (size == 0 || size > 1048576)
         throw std::runtime_error("GenICam file size out of range (1..1048576)");
-    if (!path.empty()) {
-        print_section("gige-get-xml");
-        print_field("url") << url << '\n';
-        print_field("path") << path << '\n';
-    }
-    auto data = read_gige_data(address, size, !path.empty());
+    print_section("gige-get-xml");
+    print_field("url") << url << '\n';
+    print_field("path") << path << '\n';
+    auto data = read_gige_data(address, size, true);
     if (extension != ".zip")
         data = extract_genicam_xml(data);
     if (path.empty()) {
