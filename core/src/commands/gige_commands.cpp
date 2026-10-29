@@ -1,10 +1,13 @@
 #include "gige_commands.hpp"
+#include "genicam_zip.hpp"
 
 #include "bytes.hpp"
 #include "regaddr_lookup.hpp"
 
 #include <algorithm>
 #include <cstring>
+#include <cctype>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -40,6 +43,13 @@ std::vector<std::uint8_t> GigeCommandGroup::read_gige_data(std::uint32_t address
 }
 
 void GigeCommandGroup::get_xml(const std::string &path) {
+    auto extension = std::filesystem::path(path).extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (!path.empty() && extension != ".zip" && extension != ".xml")
+        throw std::invalid_argument("gige-get-xml output filename must end in .zip or .xml");
+    if (extension != ".zip" && !genicam_xml_extraction_available())
+        throw std::runtime_error("XML extraction unavailable: built without compatible zlib; use a .zip output filename");
     const auto url_data = read_gige_data(0x200, 512);
     const auto terminator = std::find(url_data.begin(), url_data.end(), 0);
     if (terminator == url_data.end())
@@ -56,10 +66,20 @@ void GigeCommandGroup::get_xml(const std::string &path) {
     const auto size = parse_u32("0x" + url.substr(size_separator + 1));
     if (size == 0 || size > 1048576)
         throw std::runtime_error("GenICam file size out of range (1..1048576)");
-    print_section("gige-get-xml");
-    print_field("url") << url << '\n';
-    print_field("path") << path << '\n';
-    const auto data = read_gige_data(address, size, true);
+    if (!path.empty()) {
+        print_section("gige-get-xml");
+        print_field("url") << url << '\n';
+        print_field("path") << path << '\n';
+    }
+    auto data = read_gige_data(address, size, !path.empty());
+    if (extension != ".zip")
+        data = extract_genicam_xml(data);
+    if (path.empty()) {
+        std::cout.write(reinterpret_cast<const char *>(data.data()), static_cast<std::streamsize>(data.size()));
+        if (!std::cout)
+            throw std::runtime_error("cannot print GenICam XML");
+        return;
+    }
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (!output)
         throw std::runtime_error("cannot open output file: " + path);
@@ -67,7 +87,7 @@ void GigeCommandGroup::get_xml(const std::string &path) {
     output.close();
     if (!output)
         throw std::runtime_error("cannot write output file: " + path);
-    print_field("bytes") << data.size() << " (raw file, not decompressed)\n";
+    print_field("bytes") << data.size() << (extension == ".zip" ? " (raw ZIP)\n" : " (extracted XML)\n");
 }
 
 std::vector<std::uint8_t> GigeCommandGroup::gige_header(const std::string &address, std::uint16_t size) {
@@ -194,8 +214,9 @@ void GigeCommandGroup::print_long_ack_time_map_page(std::size_t start_index, con
 bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std::string> &args) {
     const std::string name(name_view);
     if (name == "gige-get-xml") {
-        require_args(args, 1, "gige-get-xml requires <out_file>");
-        get_xml(args[0]);
+        if (args.size() > 1)
+            throw std::invalid_argument("gige-get-xml accepts [out_file.zip|out_file.xml]");
+        get_xml(args.empty() ? "" : args[0]);
         return true;
     }
     if (name == "gige-read") {

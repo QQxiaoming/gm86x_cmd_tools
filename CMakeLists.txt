@@ -43,10 +43,37 @@ endfunction()
 
 add_subdirectory(tools/percipio_regaddr_convert)
 
+find_package(ZLIB QUIET)
+set(GM86X_HAS_ZLIB OFF)
+if(ZLIB_FOUND)
+    include(CheckCXXSourceCompiles)
+    include(CMakePushCheckState)
+    cmake_push_check_state(RESET)
+    set(CMAKE_REQUIRED_LIBRARIES ZLIB::ZLIB)
+    unset(GM86X_ZLIB_LINKS CACHE)
+    check_cxx_source_compiles("
+        #include <zlib.h>
+        int main() {
+            z_stream stream{};
+            if (inflateInit2(&stream, -MAX_WBITS) != Z_OK) return 1;
+            inflate(&stream, Z_FINISH);
+            inflateEnd(&stream);
+            return static_cast<int>(crc32(0, nullptr, 0));
+        }" GM86X_ZLIB_LINKS)
+    cmake_pop_check_state()
+    if(GM86X_ZLIB_LINKS)
+        set(GM86X_HAS_ZLIB ON)
+    endif()
+endif()
+if(NOT GM86X_HAS_ZLIB)
+    message(STATUS "Compatible zlib not available: XML extraction disabled; raw ZIP download remains available")
+endif()
+
 add_library(gm86x_core
     core/src/commands/basic_commands.cpp
     core/src/commands/post_processor_commands.cpp
     core/src/commands/gige_commands.cpp
+    core/src/commands/genicam_zip.cpp
     core/src/commands/register_commands.cpp
     core/src/commands/partition_commands.cpp
     core/src/commands.cpp
@@ -55,6 +82,10 @@ add_library(gm86x_core
 )
 target_include_directories(gm86x_core PUBLIC core/include)
 target_link_libraries(gm86x_core PRIVATE percipio_regaddr)
+target_compile_definitions(gm86x_core PRIVATE GM86X_HAS_ZLIB=$<BOOL:${GM86X_HAS_ZLIB}>)
+if(GM86X_HAS_ZLIB)
+    target_link_libraries(gm86x_core PRIVATE ZLIB::ZLIB)
+endif()
 gm86x_enable_warnings(gm86x_core)
 
 if(WIN32)

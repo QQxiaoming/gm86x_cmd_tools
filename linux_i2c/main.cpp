@@ -87,9 +87,14 @@ int main(int argc, char **argv) {
             const auto found = gm86x::discover_device();
             bus = found.bus;
             address = found.address;
-            gm86x::CommandGroup::print_section("scan");
-            gm86x::CommandGroup::print_field("bus") << bus << '\n';
-            gm86x::CommandGroup::print_field("addr") << "0x" << std::hex << static_cast<int>(address) << std::dec << '\n';
+            if (std::string(argv[index]) == "gige-get-xml" && args.empty()) {
+                std::cerr << "Discovered I2C target: bus=" << bus << " addr=0x"
+                          << std::hex << static_cast<int>(address) << std::dec << '\n';
+            } else {
+                gm86x::CommandGroup::print_section("scan");
+                gm86x::CommandGroup::print_field("bus") << bus << '\n';
+                gm86x::CommandGroup::print_field("addr") << "0x" << std::hex << static_cast<int>(address) << std::dec << '\n';
+            }
         }
         gm86x::LinuxI2cTransport transport(bus, address);
         gm86x::ProtocolClient client(transport);

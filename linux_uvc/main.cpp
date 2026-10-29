@@ -7,6 +7,7 @@
 #include "usb_discovery.hpp"
 
 #include <chrono>
+#include <cstdio>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -97,7 +98,8 @@ int main(int argc, char **argv) {
 
 		const auto target = gm86x::discover_usb_xu_target(vendor_id, product_id, device_index);
 		const std::uint8_t unit = target.extension_unit_id;
-		printf("Discovered USB XU target: vendor_id=0x%04x, product_id=0x%04x, bus_number=%u, device_address=%u, control_interface=%u, extension_unit_id=%u\n",
+		const bool print_xml = std::string(argv[index]) == "gige-get-xml" && args.empty();
+		std::fprintf(print_xml ? stderr : stdout, "Discovered USB XU target: vendor_id=0x%04x, product_id=0x%04x, bus_number=%u, device_address=%u, control_interface=%u, extension_unit_id=%u\n",
 			target.vendor_id, target.product_id, target.bus_number, target.device_address, target.control_interface, target.extension_unit_id);
 		gm86x::LinuxUsbXuTransport transport(target, unit, i2c_forward_selector);
 		gm86x::ProtocolClient client(transport);

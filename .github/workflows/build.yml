@@ -16,18 +16,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install zlib
+        run: vcpkg install zlib:x64-windows-static-md
+
       - name: Configure CMake
         shell: pwsh
         run: |
           mkdir build
           cd build
-          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release
+          cmake .. -A x64 -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
 
       - name: Build
         shell: pwsh
         run: |
           cd build
           cmake --build . --config Release
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Upload Windows binary artifact
         uses: actions/upload-artifact@v4

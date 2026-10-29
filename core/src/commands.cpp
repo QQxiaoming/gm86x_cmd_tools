@@ -346,7 +346,7 @@ Commands:
     low-power-mode [0|1]
     isp-get-version
     gige-read <addr32|name> <size>
-    gige-get-xml <out_file>
+    gige-get-xml [out_file.zip|out_file.xml]
     gige-write <addr32|name> <size> <byte...>
     gige-get-access-map [start_index count]
     gige-get-access-map-count
@@ -393,8 +393,9 @@ Commands:
                            [--args-file <file>] [--result-size <bytes>] [--out <file>]
 
 Notes:
-    - gige-get-xml reads GevFirstURL and downloads the raw GenICam ZIP file.
-      The URL address and size are hexadecimal; the file is not decompressed.
+    - gige-get-xml reads GevFirstURL: .zip saves raw bytes, .xml saves extracted XML,
+      and no filename prints the extracted XML. URL address and size are hexadecimal.
+      XML extraction requires a build with compatible zlib; raw .zip download is always available.
       Read chunks use the transport response payload limit (I2C=8192, UVC=250 bytes).
     - Integer arguments without a prefix use decimal; use 0x, 0b, 0o, or 0d to select a base.
     - GigE and read-*-addr addresses also accept regaddr_convert register names.
@@ -439,6 +440,8 @@ Examples:
     )" << exeName << R"( format-userdata
     )" << exeName << R"( gige-get-access-map
     )" << exeName << R"( gige-get-xml TyGevCam.zip
+    )" << exeName << R"( gige-get-xml PercipioStdGenICam.xml
+    )" << exeName << R"( gige-get-xml
     )" << exeName << R"( read-userset-slot 0 userset_slot0.bin
     )" << exeName << R"( read-calib calib.bin
     )" << exeName << R"( update-boot-file 0xffffffff boot.bin
