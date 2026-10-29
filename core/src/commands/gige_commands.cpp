@@ -5,11 +5,70 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <utility>
 
 namespace gm86x::detail {
+
+std::vector<std::uint8_t> GigeCommandGroup::read_gige_data(std::uint32_t address, std::uint32_t size,
+                                                         bool show_progress) {
+    const auto chunk_size = std::min<std::size_t>(std::numeric_limits<std::uint16_t>::max(),
+                                                context_.max_response_payload_size);
+    if (chunk_size == 0)
+        throw std::invalid_argument("GigE response payload limit cannot be zero");
+    if (size == 0 || address > std::numeric_limits<std::uint32_t>::max() - (size - 1))
+        throw std::invalid_argument("GigE read address range invalid");
+    std::vector<std::uint8_t> data;
+    data.reserve(size);
+    const auto started = std::chrono::steady_clock::now();
+    while (data.size() < size) {
+        const auto count = static_cast<std::uint16_t>(std::min(chunk_size, size - data.size()));
+        auto payload = le32(address + static_cast<std::uint32_t>(data.size()));
+        append_to(payload, le16(count));
+        const auto response = execute(GMSL_COMMAND_GIGE_CAM_READ_REGISTER, payload, false, false);
+        if (response.payload.size() != count)
+            throw std::runtime_error("GigE read response length does not match requested size");
+        append_to(data, response.payload);
+        context_.sequence = static_cast<std::uint8_t>(context_.sequence + 1);
+        if (show_progress)
+            print_transfer_progress(data.size(), size, started);
+    }
+    return data;
+}
+
+void GigeCommandGroup::get_xml(const std::string &path) {
+    const auto url_data = read_gige_data(0x200, 512);
+    const auto terminator = std::find(url_data.begin(), url_data.end(), 0);
+    if (terminator == url_data.end())
+        throw std::runtime_error("GevFirstURL is not NUL-terminated");
+    const std::string url(url_data.begin(), terminator);
+    const auto address_separator = url.find(';');
+    const auto size_separator = url.find(';', address_separator == std::string::npos ? 0 : address_separator + 1);
+    if (!url.starts_with("Local:") || address_separator == std::string::npos ||
+        address_separator <= 6 || size_separator == std::string::npos ||
+        url.find(';', size_separator + 1) != std::string::npos)
+        throw std::runtime_error("invalid GenICam Local URL: " + url);
+    const auto address = parse_u32("0x" + url.substr(address_separator + 1,
+                                                    size_separator - address_separator - 1));
+    const auto size = parse_u32("0x" + url.substr(size_separator + 1));
+    if (size == 0 || size > 1048576)
+        throw std::runtime_error("GenICam file size out of range (1..1048576)");
+    print_section("gige-get-xml");
+    print_field("url") << url << '\n';
+    print_field("path") << path << '\n';
+    const auto data = read_gige_data(address, size, true);
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output)
+        throw std::runtime_error("cannot open output file: " + path);
+    output.write(reinterpret_cast<const char *>(data.data()), static_cast<std::streamsize>(data.size()));
+    output.close();
+    if (!output)
+        throw std::runtime_error("cannot write output file: " + path);
+    print_field("bytes") << data.size() << " (raw file, not decompressed)\n";
+}
 
 std::vector<std::uint8_t> GigeCommandGroup::gige_header(const std::string &address, std::uint16_t size) {
     auto payload = le32(parse_regaddr(address));
@@ -17,10 +76,11 @@ std::vector<std::uint8_t> GigeCommandGroup::gige_header(const std::string &addre
     return payload;
 }
 
-std::uint16_t GigeCommandGroup::parse_gige_size(const std::string &value) {
+std::uint16_t GigeCommandGroup::parse_gige_size(const std::string &value, std::size_t max_size) {
     const auto size = parse_u32(value);
-    if (size == 0 || size > 640)
-        throw std::invalid_argument("register size out of range (1..640): " + value);
+    max_size = std::min<std::size_t>(max_size, std::numeric_limits<std::uint16_t>::max());
+    if (size == 0 || size > max_size)
+        throw std::invalid_argument("register size out of range (1.." + std::to_string(max_size) + "): " + value);
     return static_cast<std::uint16_t>(size);
 }
 
@@ -133,10 +193,15 @@ void GigeCommandGroup::print_long_ack_time_map_page(std::size_t start_index, con
 
 bool GigeCommandGroup::try_run(std::string_view name_view, const std::vector<std::string> &args) {
     const std::string name(name_view);
+    if (name == "gige-get-xml") {
+        require_args(args, 1, "gige-get-xml requires <out_file>");
+        get_xml(args[0]);
+        return true;
+    }
     if (name == "gige-read") {
         if (args.size() != 2)
             throw std::invalid_argument(name + " arguments invalid");
-        const auto size = parse_gige_size(args[1]);
+        const auto size = parse_gige_size(args[1], context_.max_response_payload_size);
         auto payload = gige_header(args[0], size);
         const auto response = execute(GMSL_COMMAND_GIGE_CAM_READ_REGISTER, payload);
         if (response.status == 0) {
