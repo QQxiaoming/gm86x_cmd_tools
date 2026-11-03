@@ -326,6 +326,7 @@ Commands:
     post-processor-hw-raw-read <size>
     post-processor-register-write <reg> <byte...>
     post-processor-register-read <reg> <size>
+    post-processor-get-statistics
     post-processor-cmd ping [payload_byte...]
     post-processor-cmd get-status
     post-processor-cmd get-caps
@@ -409,6 +410,8 @@ Notes:
     - read-calib-addr and read-userset-addr without an address read all entries.
     - This tool uses the Linux I2C_RDWR backend instead of debugfs node.
     - Per-request timing logs are enabled by default.
+    - post-processor-get-statistics reads FPGA debug registers 0x00110060..0x0011009C.
+      The register block is not an atomic snapshot; counters reset only with global system reset.
     - Non-zero device or post-processor command status is reported as an error and exits non-zero.
     - de100-dump-registers reads the embedded documented DE100 register list; use
       --list-only to show the filtered list without connecting to a device.

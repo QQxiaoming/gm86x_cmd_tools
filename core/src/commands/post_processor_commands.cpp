@@ -379,6 +379,134 @@ void PostProcessorCommandGroup::print_get_stream_caps(std::span<const std::uint8
 }
 
 bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector<std::string> &args) {
+    if (name == "post-processor-get-statistics") {
+        require_args(args, 0, "post-processor-get-statistics takes no arguments");
+        constexpr std::uint8_t register_count = 16;
+        constexpr std::uint32_t base_address = 0x00110060;
+        std::vector<std::uint8_t> request{register_count};
+        append_to(request, le32(base_address));
+        const auto response = execute_command(0x1d, std::move(request));
+        print_command_response("fpga-reg-bulk-read", response);
+        require_payload_size(response.payload, register_count * 4U, "post-processor-get-statistics");
+
+        constexpr std::array<const char *, register_count> register_names{
+            "deleted EP1 write count",
+            "current state",
+            "historical events",
+            "VC0 input SOF/EOF",
+            "VC1 input SOF/EOF",
+            "VC2 input SOF/EOF",
+            "algorithm input SOF/EOF",
+            "algorithm mask output SOF/EOF",
+            "EP1 output to packer SOF/EOF",
+            "EP2 output to packer SOF/EOF",
+            "deleted EP2 write count",
+            "shared MIPI CRC/ECC errors",
+            "runtime abort count EP1/EP2",
+            "deleted historical-reason bits",
+            "0x54 bit0 rising-edge count",
+            "RX snapshot / ack / update sequence",
+        };
+        std::array<std::uint32_t, register_count> values{};
+        const auto payload = std::span<const std::uint8_t>(response.payload);
+        print_section("debug-registers");
+        for (std::size_t index = 0; index < register_count; ++index) {
+            values[index] = read_le_u32(payload, index * 4);
+            print_field("0x" + hex(base_address + static_cast<std::uint32_t>(index) * 4, 8), 13, 4)
+                << "0x" << hex(values[index], 8) << "  " << register_names[index] << '\n';
+        }
+
+        constexpr std::array<std::pair<unsigned, const char *>, 25> state_bits{{
+            {0, "pipeline reset"},
+            {1, "shared stream enable"},
+            {2, "legacy depth select (not source control)"},
+            {3, "mask bypass"},
+            {4, "EP2 CDC write allowed"},
+            {5, "EP2 CDC full"},
+            {6, "EP2 CDC flush or initialization"},
+            {7, "EP2 IEBM has no pending buffer"},
+            {8, "algorithm enabled"},
+            {9, "SYS data path out of reset"},
+            {10, "EP2 packer marker error"},
+            {11, "EP2 packer byte-count error"},
+            {13, "EP1 CDC write allowed"},
+            {14, "EP1 CDC full"},
+            {15, "EP1 CDC flush or initialization"},
+            {16, "EP1 IEBM has no pending buffer"},
+            {17, "EP1 packer FIFO full"},
+            {18, "EP2 packer FIFO full"},
+            {19, "RX out of reset"},
+            {22, "EP1 receive fault"},
+            {23, "algorithm IR input fault"},
+            {24, "Depth receive fault"},
+            {25, "mask alignment fault"},
+            {26, "EP1 packer marker error"},
+            {27, "EP1 packer byte-count error"},
+        }};
+        print_section("current-state-0x64");
+        for (const auto &[bit, description] : state_bits)
+            print_field("bit" + std::to_string(bit), 8, 4)
+                << ((values[1] >> bit) & 1U) << "  " << description << '\n';
+        print_field("binning", 8, 4) << ((values[1] >> 20) & 3U)
+                                     << "  (0=full, 1=half, 2=quarter, 3=reserved)\n";
+
+        constexpr std::array<std::pair<unsigned, const char *>, 20> history_bits{{
+            {0, "EP1 CDC was full"},
+            {1, "EP2 CDC was full"},
+            {2, "EP1 had no buffer"},
+            {3, "EP2 had no buffer"},
+            {6, "EP1 packer FIFO was full"},
+            {7, "EP2 packer FIFO was full"},
+            {8, "EP1 receive fault occurred"},
+            {9, "algorithm IR input fault occurred"},
+            {10, "Depth receive fault occurred"},
+            {11, "mask alignment fault occurred"},
+            {12, "EP1 packer marker error"},
+            {13, "EP2 packer marker error"},
+            {14, "EP1 packer frame byte-count error"},
+            {15, "EP2 packer frame byte-count error"},
+            {16, "EP1 real write overflow"},
+            {17, "EP2 real write overflow"},
+            {18, "EP1 runtime abort"},
+            {19, "EP2 runtime abort"},
+            {20, "EP1 receive FIFO overflow"},
+            {21, "algorithm IR input FIFO overflow"},
+        }};
+        print_section("historical-events-0x68");
+        for (const auto &[bit, description] : history_bits)
+            print_field("bit" + std::to_string(bit), 8, 4)
+                << ((values[2] >> bit) & 1U) << "  " << description << '\n';
+        for (const auto &[bit, description] :
+             std::array<std::pair<unsigned, const char *>, 4>{{
+                 {22, "Depth receive FIFO overflow"},
+                 {24, "shared MIPI CRC error"},
+                 {25, "shared MIPI ECC error"},
+                 {23, "reserved"},
+             }})
+            print_field("bit" + std::to_string(bit), 8, 4)
+                << ((values[2] >> bit) & 1U) << "  " << description << '\n';
+
+        constexpr std::array<const char *, 7> stream_names{
+            "VC0 input", "VC1 input", "VC2 input", "algorithm input",
+            "algorithm mask output", "EP1 output to packer", "EP2 output to packer",
+        };
+        print_section("sof-eof-counts");
+        for (std::size_t index = 0; index < stream_names.size(); ++index) {
+            const auto value = values[index + 3];
+            print_field(stream_names[index], 25, 4)
+                << "SOF=" << (value & 0xffffU) << " EOF=" << (value >> 16) << '\n';
+        }
+        print_section("error-and-abort-counts");
+        print_field("shared MIPI", 25, 4) << "CRC=" << (values[11] & 0xffffU)
+                                          << " ECC=" << (values[11] >> 16) << '\n';
+        print_field("runtime abort", 25, 4) << "EP1=" << (values[12] & 0xffffU)
+                                            << " EP2=" << (values[12] >> 16) << '\n';
+        print_field("0x54 bit0 rising edges", 25, 4) << values[14] << '\n';
+        print_field("RX snapshot valid", 25, 4) << ((values[15] >> 31) & 1U) << '\n';
+        print_field("waiting for RX ack", 25, 4) << ((values[15] >> 30) & 1U) << '\n';
+        print_field("update sequence", 25, 4) << (values[15] & 0x3fffffffU) << '\n';
+        return true;
+    }
     if (name == "post-processor-raw-write") {
         if (args.empty())
             throw std::invalid_argument("post-processor-raw-write requires <data>");
