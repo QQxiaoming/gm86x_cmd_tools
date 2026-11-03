@@ -338,6 +338,10 @@ Commands:
     post-processor-cmd clear-statistics
     post-processor-cmd reset-usb
     post-processor-cmd ota-control <ota_payload_byte...>
+    post-processor-cmd fpga-reg-read <register_address>
+    post-processor-cmd fpga-reg-write <register_address> <value>
+    post-processor-cmd fpga-reg-bulk-read <start_register_address> <num_registers>
+    post-processor-cmd fpga-reg-bulk-write <start_register_address> <num_registers> <values...>
     imu-read <count>
     temp-read <0|1|2|3|left|right|laser|laser2>
     set-auto-userset-slot <slot>

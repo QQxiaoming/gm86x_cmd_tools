@@ -613,9 +613,12 @@ bool PostProcessorCommandGroup::try_run(std::string_view name, const std::vector
             return true;
         }
         if (args[0] == "fpga-reg-bulk-write") {
-            require_args(args, 3, "post-processor-cmd fpga-reg-bulk-write requires <start_register_address> <num_registers> <values...>");
+            if (args.size() < 3)
+                throw std::invalid_argument("post-processor-cmd fpga-reg-bulk-write requires <start_register_address> <num_registers> <values...>");
             const auto start_register_address = parse_u32(args[1]);
             const auto num_registers = parse_byte(args[2]);
+            require_args(args, 3U + static_cast<std::size_t>(num_registers),
+                         "post-processor-cmd fpga-reg-bulk-write requires one value per register");
             std::vector<std::uint32_t> values;
             for (std::size_t i = 0; i < static_cast<std::size_t>(num_registers); ++i) {
                 values.push_back(parse_u32(args[3 + i]));
