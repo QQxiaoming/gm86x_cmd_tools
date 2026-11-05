@@ -332,7 +332,7 @@ Commands:
     isp-subsnr-write <reg16> <value16>
     isp-flash-status
     isp-flash-abort
-    isp-flash-update <image.src> --confirm 0x85
+    isp-flash-update <image.src>
     post-processor-raw-write <byte...>
     post-processor-raw-read <size>
     post-processor-hw-raw-write <byte...>

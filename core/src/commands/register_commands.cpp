@@ -644,9 +644,7 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
             print_status(query(name == "isp-flash-status" ? 2 : 4));
             return true;
         }
-        require_args(args, 3, name + " requires <image.src> --confirm 0x85");
-        if (args[1] != "--confirm" || args[2] != "0x85")
-            throw std::invalid_argument("ISP update requires --confirm 0x85");
+        require_args(args, 1, name + " requires <image.src>");
         std::ifstream input(args[0], std::ios::binary | std::ios::ate);
         if (!input || input.tellg() != 0x20000)
             throw std::runtime_error("ISP update requires an exact 128 KiB image");
