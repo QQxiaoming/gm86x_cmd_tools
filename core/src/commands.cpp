@@ -130,6 +130,8 @@ const char *CommandGroup::opcode_name(std::uint8_t opcode) {
         return "POST_PROCESSOR_HW_RAW_READ";
     case GMSL_COMMAND_PERCIPIO_DEBUG:
         return "PERCIPIO_DEBUG";
+    case GMSL_COMMAND_ISP_FLASH_UPDATE:
+        return "ISP_FLASH_UPDATE";
     default:
         return "UNKNOWN";
     }
@@ -320,6 +322,9 @@ Commands:
     isp-write <reg16> <value8>
     isp-subsnr-read <reg16>
     isp-subsnr-write <reg16> <value16>
+    isp-flash-status
+    isp-flash-abort
+    isp-flash-update <image.src> --confirm 0x85
     post-processor-raw-write <byte...>
     post-processor-raw-read <size>
     post-processor-hw-raw-write <byte...>

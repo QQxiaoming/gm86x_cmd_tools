@@ -11,6 +11,8 @@
 #include <regex>
 #include <sstream>
 #include <string_view>
+#include <thread>
+#include <chrono>
 
 #if defined(__linux__)
 #  include <byteswap.h>
@@ -613,6 +615,138 @@ bool RegisterCommandGroup::try_run(std::string_view name_view, const std::vector
             std::cout << "dumped " << successes << " register(s), " << errors << " error(s) to stdout\n";
         if (errors)
             throw std::runtime_error(std::to_string(errors) + " register read(s) failed");
+        return true;
+    }
+    if (name == "isp-flash-status" || name == "isp-flash-abort" ||
+        name == "isp-flash-update") {
+        const auto query = [&](std::uint8_t op, std::vector<std::uint8_t> payload = {}) {
+            payload.insert(payload.begin(), op);
+            const auto response = execute(GMSL_COMMAND_ISP_FLASH_UPDATE, payload, false, false);
+            if (response.payload.size() != 20U)
+                throw std::runtime_error("ISP Flash protocol mismatch: update MCU and host tool together");
+            context_.sequence = static_cast<std::uint8_t>(context_.sequence + 1);
+            return response.payload;
+        };
+        const auto read_u32 = [](const auto &bytes, std::size_t offset) {
+            return std::uint32_t(bytes[offset]) | (std::uint32_t(bytes[offset + 1]) << 8) |
+                   (std::uint32_t(bytes[offset + 2]) << 16) |
+                   (std::uint32_t(bytes[offset + 3]) << 24);
+        };
+        const auto print_status = [&](const auto &status) {
+            print_field("state") << read_u32(status, 0) << '\n';
+            print_field("received") << read_u32(status, 4) << '\n';
+            print_field("programmed") << read_u32(status, 8) << '\n';
+            print_field("verified") << read_u32(status, 12) << '\n';
+            print_field("error") << static_cast<std::int32_t>(read_u32(status, 16)) << '\n';
+        };
+        if (name != "isp-flash-update") {
+            require_args(args, 0, name + " takes no arguments");
+            print_status(query(name == "isp-flash-status" ? 2 : 4));
+            return true;
+        }
+        require_args(args, 3, name + " requires <image.src> --confirm 0x85");
+        if (args[1] != "--confirm" || args[2] != "0x85")
+            throw std::invalid_argument("ISP update requires --confirm 0x85");
+        std::ifstream input(args[0], std::ios::binary | std::ios::ate);
+        if (!input || input.tellg() != 0x20000)
+            throw std::runtime_error("ISP update requires an exact 128 KiB image");
+        input.seekg(0);
+        std::vector<std::uint8_t> image(0x20000);
+        if (!input.read(reinterpret_cast<char *>(image.data()), image.size()))
+            throw std::runtime_error("cannot read ISP image");
+        if (image[0] != 'S' || image[1] != 'N' || image[2] != '9' || image[3] != 'C')
+            throw std::runtime_error("ISP image is missing SN9C signature");
+        std::uint32_t crc = 0xffffffff;
+        for (const auto byte : image) {
+            crc ^= byte;
+            for (unsigned bit = 0; bit < 8; ++bit)
+                crc = (crc >> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+        }
+        constexpr std::size_t frame_overhead = 10;
+        const auto transfer_limit = std::min<std::size_t>(8192, context_.max_control_transfer_size);
+        if (transfer_limit < frame_overhead + 4)
+            throw std::invalid_argument("ISP update control transfer limit must allow at least 4 data bytes");
+        const auto chunk_size = std::min<std::size_t>(4096, transfer_limit - frame_overhead);
+        const auto started = std::chrono::steady_clock::now();
+        const auto show_progress = [&](const auto &status) {
+            const auto programmed = read_u32(status, 8);
+            const auto verified = read_u32(status, 12);
+            if (programmed > image.size() || verified > programmed ||
+                programmed > read_u32(status, 4) || read_u32(status, 4) > image.size())
+                throw std::runtime_error("invalid ISP Flash progress counters");
+            const auto completed = std::size_t(programmed);
+            const auto total = image.size();
+            print_transfer_progress(read_u32(status, 0) == 4 ? completed :
+                                    std::min(completed, total - (total / 10000 + 1)), total, started);
+        };
+        const auto wait_ready = [&] {
+            auto deadline = std::chrono::steady_clock::now() + std::chrono::minutes(15);
+            std::uint32_t previous_progress = 0;
+            while (true) {
+                const auto status = query(2);
+                const auto state = read_u32(status, 0);
+                if (state == 5)
+                    throw std::runtime_error("ISP Flash update failed, error=" +
+                        std::to_string(static_cast<std::int32_t>(read_u32(status, 16))));
+                show_progress(status);
+                const auto progress = read_u32(status, 8);
+                if (progress != previous_progress) {
+                    previous_progress = progress;
+                    deadline = std::chrono::steady_clock::now() + std::chrono::minutes(15);
+                }
+                if (state == 2 || state == 4)
+                    return status;
+                if (state != 1 && state != 3 && state != 6 && state != 7)
+                    throw std::runtime_error("unexpected ISP update state=" + std::to_string(state));
+                if (std::chrono::steady_clock::now() >= deadline)
+                    throw std::runtime_error("ISP Flash update polling timed out");
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        };
+        auto start = le32(static_cast<std::uint32_t>(image.size()));
+        append_to(start, le32(crc ^ 0xffffffff));
+        std::cerr << "WARNING: replacing first 128 KiB of ISP Flash; interruption may require external recovery\n";
+        const auto power_response = execute(GMSL_COMMAND_LOW_POWER_MODE, {0}, false, false);
+        if (!power_response.payload.empty())
+            throw std::runtime_error("invalid low-power-mode response size");
+        std::cerr << "MCU low-power mode disabled; left disabled until reset or explicit re-enable.\n";
+        query(2);
+        print_section("isp-flash-update");
+        print_field("chunk_size") << chunk_size << " bytes\n";
+        print_field("phases") << "program only; power-cycle and verify via USB afterwards\n";
+        query(0, start);
+        try {
+            wait_ready();
+            for (std::uint32_t offset = 0; offset < image.size();) {
+                const auto count = std::min<std::size_t>(chunk_size, 4096 - offset % 4096);
+                auto payload = le32(offset);
+                payload.insert(payload.end(), image.begin() + offset, image.begin() + offset + count);
+                const auto status = query(1, payload);
+                offset += static_cast<std::uint32_t>(count);
+                if (read_u32(status, 4) != offset)
+                    throw std::runtime_error("ISP update offset acknowledgment mismatch");
+                if (offset % 4096 == 0) {
+                    const auto ready = wait_ready();
+                    if (read_u32(ready, 8) != offset)
+                        throw std::runtime_error("ISP programming acknowledgment mismatch");
+                }
+            }
+            query(3);
+            const auto status = wait_ready();
+            if (read_u32(status, 0) != 4 || read_u32(status, 8) != image.size() ||
+                read_u32(status, 4) != image.size() || read_u32(status, 16) != 0)
+                throw std::runtime_error("ISP update did not reach completed state");
+            std::cout << "ISP programming completed; Flash contents NOT verified. Power-cycle and verify via USB.\n";
+        } catch (const std::exception &error) {
+            std::cout << '\n';
+            try {
+                query(4);
+            } catch (const std::exception &abort_error) {
+                throw std::runtime_error(std::string(error.what()) +
+                    "; abort request failed: " + abort_error.what());
+            }
+            throw;
+        }
         return true;
     }
     if (name == "isp-read") {
