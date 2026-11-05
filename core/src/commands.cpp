@@ -245,10 +245,18 @@ void CommandGroup::print_transfer_progress(std::size_t completed, std::size_t to
     const auto fraction = total ? static_cast<double>(completed) / total : 1.0;
     const auto filled = std::min(width, static_cast<std::size_t>(fraction * width));
     const auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    const auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now() - started).count();
+    const auto hours = elapsed_seconds / 3600;
+    const auto minutes = (elapsed_seconds % 3600) / 60;
+    const auto seconds = elapsed_seconds % 60;
+    std::ostringstream elapsed_time;
+    elapsed_time << std::setfill('0') << std::setw(2) << hours << ':'
+                 << std::setw(2) << minutes << ':' << std::setw(2) << seconds;
     const auto average_rate = elapsed > 0 ? completed / elapsed / 1000.0 : 0.0;
     std::cout << "\r\033[K  progress    : [" << std::string(filled, '=') << std::string(width - filled, ' ') << "] "
               << std::fixed << std::setprecision(2) << std::setw(6) << fraction * 100.0 << "% (" << completed << '/'
-              << total << " bytes) avg=" << average_rate << "kB/s elapsed=" << std::setprecision(1) << elapsed << "s"
+              << total << " bytes) avg=" << average_rate << "kB/s elapsed=" << elapsed_time.str()
               << std::flush;
     if (completed == total)
         std::cout << '\n';
